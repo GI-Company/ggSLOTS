@@ -9,6 +9,17 @@ export type ViewType = 'main' | 'promotions' | 'vip' | 'get-coins' | 'redeem' | 
 export interface UserProfile {
   id: string;
   email: string;
+  // Personal Details
+  firstName?: string;
+  lastName?: string;
+  dob?: string; // YYYY-MM-DD
+  
+  // Location
+  city?: string;
+  state?: string;
+  zip?: string;
+
+  // Balances & Status
   gcBalance: number;
   scBalance: number;
   vipLevel: string;

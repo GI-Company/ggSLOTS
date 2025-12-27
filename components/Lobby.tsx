@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+
+import React from 'react';
 import { GameConfig } from '../types';
 import { GAMES_LIST } from '../constants';
 
@@ -10,29 +11,6 @@ interface LobbyProps {
 }
 
 export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister, onGuestPlay }) => {
-  const tickerRef = useRef<HTMLDivElement>(null);
-  
-  // Ticker Logic (Same as before)
-  useEffect(() => {
-    const names = ["SpinMaster", "JackpotJoe", "ReelQueen", "LuckyLucy", "VortexVinnie"];
-    const ticker = tickerRef.current;
-    if(!ticker) return;
-
-    const interval = setInterval(() => {
-        const item = document.createElement('div');
-        item.className = "text-sm text-slate-300 py-1 transition-opacity duration-500 animate-in fade-in slide-in-from-top-2";
-        const name = names[Math.floor(Math.random() * names.length)];
-        const amt = Math.floor(Math.random() * 500) + 10;
-        const curr = Math.random() > 0.8 ? 'SC' : 'GC';
-        const formattedAmt = curr === 'SC' ? amt.toFixed(2) : (amt * 100).toLocaleString();
-        item.innerHTML = `<span class="font-bold text-white">${name}</span> just won <span class="${curr === 'SC' ? 'text-green-400' : 'text-yellow-400'} font-bold">${formattedAmt} ${curr}</span>`;
-        if (ticker.firstChild) ticker.insertBefore(item, ticker.firstChild);
-        else ticker.appendChild(item);
-        if (ticker.children.length > 8) ticker.removeChild(ticker.lastChild!);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto">
         
@@ -40,17 +18,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
         <div className="relative rounded-2xl overflow-hidden mb-8 h-64 md:h-80 w-full bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 flex flex-col shadow-2xl border border-white/10">
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>
             <div className="relative h-full flex flex-col justify-center p-8 md:p-12 z-10">
-                <div className="w-full flex justify-between items-start mb-auto">
-                     <div className="bg-black/30 backdrop-blur-md rounded-lg p-3 border border-white/10 w-64 hidden md:block">
-                        <div className="flex items-center gap-2 mb-2">
-                             <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>
-                             <span className="text-xs font-bold text-white uppercase tracking-wider">Live Wins</span>
-                        </div>
-                        <div ref={tickerRef} className="flex flex-col h-24 overflow-hidden mask-image-linear-gradient"></div>
-                     </div>
-                </div>
                 
-                <div className="text-center md:text-left">
+                <div className="text-center md:text-left mt-auto mb-auto">
                     <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 mb-4 drop-shadow-lg font-display">
                         COSMIC CASH
                     </h1>

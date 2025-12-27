@@ -124,8 +124,6 @@ const calculateSpinResult = (wager: number, currency: CurrencyType): { result: W
 };
 
 // --- SYSTEM LEDGER (MOCK) ---
-// Replaces the concept of "House Wallet".
-// This represents the central authority's float.
 const MOCK_SYSTEM_LEDGER = {
     tenantId: DEMO_TENANT_ID,
     gcBalance: 9000000000000000000,
@@ -199,20 +197,41 @@ export const supabaseService = {
         return { user: guestUser, message };
     },
 
-    signIn: async (email: string): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
+    /**
+     * Handles both Login and Registration in the mock environment.
+     * If `profileData` is provided, it updates/creates the user with that data.
+     */
+    signIn: async (email: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
+      // 1. Supabase Path
       if (supabase) {
         try {
+            // Check if user exists
             const { data: existingUser } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('email', email)
                 .single();
-            if (existingUser) return { data: existingUser as UserProfile, error: null };
+            
+            if (existingUser) {
+                // Return existing user
+                return { data: existingUser as UserProfile, error: null };
+            } else if (profileData) {
+                // If no user but we have profile data, it's a registration attempt via Supabase
+                // Note: Real Supabase auth requires signUp() -> then insert to profiles.
+                // This block is simplified for the prompt's context of mostly-frontend logic.
+                const { data: newUser, error } = await supabase
+                    .from('profiles')
+                    .insert([{ email, ...profileData }])
+                    .select()
+                    .single();
+                return { data: newUser as UserProfile, error: error?.message || null, message: "Registration successful!" };
+            }
         } catch (e) {
             console.warn("Supabase connection failed, falling back to local.");
         }
       }
 
+      // 2. Mock / Local Storage Path
       await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
       const stored = localStorage.getItem(STORAGE_KEY);
       
@@ -221,10 +240,38 @@ export const supabaseService = {
 
       if (stored) {
           const parsedUser = JSON.parse(stored);
-          const bonusResult = applyDailyBonus(parsedUser);
-          user = bonusResult.user;
-          message = bonusResult.message;
+          if (parsedUser.email === email) {
+              const bonusResult = applyDailyBonus(parsedUser);
+              user = bonusResult.user;
+              message = bonusResult.message;
+          } else {
+              // Overwriting session for demo purposes if emails mismatch in single-user mock
+              // If profileData is present, it's a new register replacing the old mock
+              if (profileData) {
+                  user = {
+                    id: 'user_' + Math.random().toString(36).substr(2, 9),
+                    email: email,
+                    gcBalance: 100000,
+                    scBalance: 2.00,
+                    vipLevel: 'Bronze',
+                    hasUnlockedRedemption: false,
+                    redeemableSc: 0,
+                    isGuest: false,
+                    lastLogin: Date.now(),
+                    consecutiveDays: 1,
+                    tenantId: DEMO_TENANT_ID,
+                    ...profileData // Merge new registration fields
+                  };
+                  message = "Welcome! You received 100,000 GC Signup Bonus!";
+              } else {
+                  return { data: null, error: "User not found locally. Please Register." };
+              }
+          }
       } else {
+          // New User
+          if (!profileData) {
+              return { data: null, error: "User not found. Please Register." };
+          }
           user = {
             id: 'user_' + Math.random().toString(36).substr(2, 9),
             email: email,
@@ -236,7 +283,8 @@ export const supabaseService = {
             isGuest: false,
             lastLogin: Date.now(),
             consecutiveDays: 1,
-            tenantId: DEMO_TENANT_ID
+            tenantId: DEMO_TENANT_ID,
+            ...profileData // Merge new registration fields
           };
           message = "Welcome! You received 100,000 GC Signup Bonus!";
       }
@@ -245,8 +293,20 @@ export const supabaseService = {
       return { data: user, error: null, message };
     },
 
+    resetPassword: async (email: string): Promise<{ success: boolean, message: string }> => {
+        if (supabase) {
+            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            if (error) return { success: false, message: error.message };
+            return { success: true, message: "Password reset link sent to your email." };
+        }
+        // Mock
+        await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+        return { success: true, message: `(Mock) Reset link sent to ${email}` };
+    },
+
     signOut: async (): Promise<void> => {
       if (supabase) await supabase.auth.signOut();
+      localStorage.removeItem(STORAGE_KEY);
     },
 
     getSession: async (): Promise<UserProfile | null> => {
@@ -264,24 +324,14 @@ export const supabaseService = {
   },
 
   game: {
-    /**
-     * Executes an Atomic Transaction.
-     * This separates the Game Logic (Frontend/Client) from the Financial Logic (Backend/Ledger).
-     * 1. Client calculates Outcome (Game Engine).
-     * 2. Client generates Idempotency Key (Safety).
-     * 3. Database executes Debit + Credit in one atomic block.
-     */
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string): Promise<{ user: UserProfile, result: WinResult }> => {
-        // 1. Client-Side Game Engine Logic
         const math = calculateSpinResult(wager, currency);
         const winAmount = math.result.totalWin;
         const idempotencyKey = generateIdempotencyKey();
         const tenantId = user.tenantId || DEMO_TENANT_ID;
 
-        // 2. Ledger Transaction
         if (supabase) {
              try {
-                 // Call the secure RPC function
                  const { error } = await supabase.rpc('execute_atomic_transaction', {
                      p_user_id: user.id,
                      p_tenant_id: tenantId,
@@ -294,7 +344,6 @@ export const supabaseService = {
 
                  if (error) throw error;
                  
-                 // Fetch updated profile state to ensure frontend matches backend truth
                  const { data: updatedProfile } = await supabase
                     .from('profiles')
                     .select('*')
@@ -309,30 +358,23 @@ export const supabaseService = {
              }
         } 
         
-        // --- MOCK FALLBACK (OFFLINE LEDGER) ---
         await new Promise(resolve => setTimeout(resolve, MOCK_DELAY)); 
         let updatedUser = { ...user };
         
-        // Ledger Logic: Debit User, Credit System
         const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
         const ledgerField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
 
         if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
 
-        // Execute Debit
         updatedUser[balanceField] -= wager;
-        MOCK_SYSTEM_LEDGER[ledgerField] -= wager; // Ledger receives funds (Conceptually, actually it gains, but balances are floats)
-        // Wait, System Ledger GAINS the wager.
         MOCK_SYSTEM_LEDGER[ledgerField] += wager;
 
-        // Execute Credit
         if (winAmount > 0) {
             updatedUser[balanceField] += winAmount;
             if (currency === CurrencyType.SC) updatedUser.redeemableSc += winAmount;
-            MOCK_SYSTEM_LEDGER[ledgerField] -= winAmount; // Ledger pays out
+            MOCK_SYSTEM_LEDGER[ledgerField] -= winAmount;
         }
         
-        // Record Immutable Event Log
         const historyEntry: GameHistoryEntry = {
             id: idempotencyKey,
             activityId: gameId,
@@ -343,11 +385,9 @@ export const supabaseService = {
             result: winAmount > 0 ? 'WIN' : 'LOSS'
         };
 
-        // Persist User State
         const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
         localStorage.setItem(storageKey, JSON.stringify(updatedUser));
         
-        // Persist History
         const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
         const history = JSON.parse(storedHistory);
         history.unshift(historyEntry);
@@ -372,11 +412,10 @@ export const supabaseService = {
                     debit: row.debit_amount,
                     credit: row.credit_amount,
                     currency: row.currency,
-                    result: row.result === 'WIN' ? 'WIN' : 'LOSS' // Simplify for UI
+                    result: row.result === 'WIN' ? 'WIN' : 'LOSS'
                 }));
             }
         }
-        // Mock fallback
         await new Promise(resolve => setTimeout(resolve, 200));
         const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
         return storedHistory ? JSON.parse(storedHistory) : [];

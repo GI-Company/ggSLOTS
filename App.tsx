@@ -33,8 +33,15 @@ const App: React.FC = () => {
       }
   }, [notification]);
 
-  const handleAuth = async (email: string) => {
-    const { data, message } = await supabaseService.auth.signIn(email);
+  const handleAuth = async (email: string, profileData?: any) => {
+    // If profileData exists, it's a registration call
+    const { data, message, error } = await supabaseService.auth.signIn(email, profileData);
+    
+    if (error) {
+        alert(error);
+        return;
+    }
+
     if(data) setUser(data);
     if(message) setNotification(message);
     setAuthModalType(null);
