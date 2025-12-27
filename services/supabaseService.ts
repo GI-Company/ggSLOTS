@@ -13,13 +13,11 @@ const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Utility: Generate UUID v4 for Idempotency Keys
- * This ensures every transaction is unique and safe to retry.
  */
 function generateIdempotencyKey(): string {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
         return crypto.randomUUID();
     }
-    // Fallback for older environments
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
@@ -27,7 +25,7 @@ function generateIdempotencyKey(): string {
 }
 
 /**
- * Robust Pseudo-Random Number Generator using Lagged Fibonacci Generator (LFG).
+ * Robust Pseudo-Random Number Generator (LFG)
  */
 class FibonacciPRNG {
     private state: number[];
@@ -123,13 +121,6 @@ const calculateSpinResult = (wager: number, currency: CurrencyType): { result: W
     };
 };
 
-// --- SYSTEM LEDGER (MOCK) ---
-const MOCK_SYSTEM_LEDGER = {
-    tenantId: DEMO_TENANT_ID,
-    gcBalance: 9000000000000000000,
-    scBalance: 1000000000
-};
-
 const applyDailyBonus = (user: UserProfile): { user: UserProfile, message?: string } => {
     const now = Date.now();
     const lastLogin = user.lastLogin || 0;
@@ -197,12 +188,8 @@ export const supabaseService = {
         return { user: guestUser, message };
     },
 
-    /**
-     * Handles both Login and Registration in the mock environment.
-     * If `profileData` is provided, it updates/creates the user with that data.
-     */
     signIn: async (email: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
-      // 1. Supabase Path
+      // 1. Supabase Path (Active if Env Vars are set)
       if (supabase) {
         try {
             // Check if user exists
@@ -213,21 +200,25 @@ export const supabaseService = {
                 .single();
             
             if (existingUser) {
-                // Return existing user
                 return { data: existingUser as UserProfile, error: null };
             } else if (profileData) {
-                // If no user but we have profile data, it's a registration attempt via Supabase
-                // Note: Real Supabase auth requires signUp() -> then insert to profiles.
-                // This block is simplified for the prompt's context of mostly-frontend logic.
+                // Registration Logic
+                // Note: In a real app, you would use supabase.auth.signUp() here.
+                // We assume the user creates the auth entry, then we insert the profile.
+                // For this demo structure, we act as if auth is handled and just insert profile.
                 const { data: newUser, error } = await supabase
                     .from('profiles')
                     .insert([{ email, ...profileData }])
                     .select()
                     .single();
-                return { data: newUser as UserProfile, error: error?.message || null, message: "Registration successful!" };
+                    
+                if (error) throw error;
+                return { data: newUser as UserProfile, error: null, message: "Registration successful!" };
             }
-        } catch (e) {
-            console.warn("Supabase connection failed, falling back to local.");
+        } catch (e: any) {
+            // If the table doesn't exist or connection fails, we might want to alert the developer
+            // But for now, if Supabase is misconfigured, we return error.
+            return { data: null, error: e.message || "Connection Error" };
         }
       }
 
@@ -245,8 +236,6 @@ export const supabaseService = {
               user = bonusResult.user;
               message = bonusResult.message;
           } else {
-              // Overwriting session for demo purposes if emails mismatch in single-user mock
-              // If profileData is present, it's a new register replacing the old mock
               if (profileData) {
                   user = {
                     id: 'user_' + Math.random().toString(36).substr(2, 9),
@@ -260,7 +249,7 @@ export const supabaseService = {
                     lastLogin: Date.now(),
                     consecutiveDays: 1,
                     tenantId: DEMO_TENANT_ID,
-                    ...profileData // Merge new registration fields
+                    ...profileData
                   };
                   message = "Welcome! You received 100,000 GC Signup Bonus!";
               } else {
@@ -268,7 +257,6 @@ export const supabaseService = {
               }
           }
       } else {
-          // New User
           if (!profileData) {
               return { data: null, error: "User not found. Please Register." };
           }
@@ -284,7 +272,7 @@ export const supabaseService = {
             lastLogin: Date.now(),
             consecutiveDays: 1,
             tenantId: DEMO_TENANT_ID,
-            ...profileData // Merge new registration fields
+            ...profileData
           };
           message = "Welcome! You received 100,000 GC Signup Bonus!";
       }
@@ -299,7 +287,6 @@ export const supabaseService = {
             if (error) return { success: false, message: error.message };
             return { success: true, message: "Password reset link sent to your email." };
         }
-        // Mock
         await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
         return { success: true, message: `(Mock) Reset link sent to ${email}` };
     },
@@ -310,13 +297,21 @@ export const supabaseService = {
     },
 
     getSession: async (): Promise<UserProfile | null> => {
+      // 1. If Supabase is active, we ONLY check Supabase session.
+      // We do NOT fall back to local storage 'STORAGE_KEY' to prevent "ghost" sessions.
       if (supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-               const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-               return data as UserProfile;
+          try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) {
+                   const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+                   return data as UserProfile;
+              }
+              return null;
+          } catch (e) {
+              return null;
           }
       }
+      // 2. Mock Fallback
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) return JSON.parse(stored);
       return null;
@@ -330,7 +325,9 @@ export const supabaseService = {
         const idempotencyKey = generateIdempotencyKey();
         const tenantId = user.tenantId || DEMO_TENANT_ID;
 
-        if (supabase) {
+        // CRITICAL: We only use Supabase RPC if the client exists AND the user is NOT a guest.
+        // Guests always run locally to save DB costs.
+        if (supabase && !user.isGuest) {
              try {
                  const { error } = await supabase.rpc('execute_atomic_transaction', {
                      p_user_id: user.id,
@@ -354,25 +351,24 @@ export const supabaseService = {
 
              } catch (e) {
                  console.error("Transaction Failed:", e);
+                 // Fallback? No, for real money/SC logic, we must fail if DB fails.
                  throw new Error("Transaction failed. Please try again.");
              }
         } 
         
+        // Mock / Guest Logic
         await new Promise(resolve => setTimeout(resolve, MOCK_DELAY)); 
         let updatedUser = { ...user };
         
         const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
-        const ledgerField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
 
         if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
 
         updatedUser[balanceField] -= wager;
-        MOCK_SYSTEM_LEDGER[ledgerField] += wager;
 
         if (winAmount > 0) {
             updatedUser[balanceField] += winAmount;
             if (currency === CurrencyType.SC) updatedUser.redeemableSc += winAmount;
-            MOCK_SYSTEM_LEDGER[ledgerField] -= winAmount;
         }
         
         const historyEntry: GameHistoryEntry = {
@@ -386,8 +382,12 @@ export const supabaseService = {
         };
 
         const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
-        localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+        // Only persist to local storage if we are in mock mode OR it's a guest
+        if (!supabase || user.isGuest) {
+             localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+        }
         
+        // Local History
         const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
         const history = JSON.parse(storedHistory);
         history.unshift(historyEntry);
@@ -398,22 +398,26 @@ export const supabaseService = {
 
     getHistory: async (): Promise<GameHistoryEntry[]> => {
         if (supabase) {
-            const { data } = await supabase
-                .from('transaction_events')
-                .select('id, activity_id, debit_amount, credit_amount, currency, result, created_at')
-                .order('created_at', { ascending: false })
-                .limit(50);
-            
-            if (data) {
-                return data.map((row: any) => ({
-                    id: row.id,
-                    activityId: row.activity_id,
-                    timestamp: new Date(row.created_at).getTime(),
-                    debit: row.debit_amount,
-                    credit: row.credit_amount,
-                    currency: row.currency,
-                    result: row.result === 'WIN' ? 'WIN' : 'LOSS'
-                }));
+            // Guests don't have DB history
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                const { data } = await supabase
+                    .from('transaction_events')
+                    .select('id, activity_id, debit_amount, credit_amount, currency, result, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                
+                if (data) {
+                    return data.map((row: any) => ({
+                        id: row.id,
+                        activityId: row.activity_id,
+                        timestamp: new Date(row.created_at).getTime(),
+                        debit: row.debit_amount,
+                        credit: row.credit_amount,
+                        currency: row.currency,
+                        result: row.result === 'WIN' ? 'WIN' : 'LOSS'
+                    }));
+                }
             }
         }
         await new Promise(resolve => setTimeout(resolve, 200));
