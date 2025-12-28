@@ -1,6 +1,6 @@
 
 import { UserProfile, CurrencyType, WinResult, GameHistoryEntry } from '../types';
-import { REDEMPTION_UNLOCK_PRICE, REEL_STRIPS, PAYLINES, PAYOUTS } from '../constants';
+import { REDEMPTION_UNLOCK_PRICE, GAME_DATA, PAYLINES } from '../constants';
 import { supabase } from '../lib/supabaseClient';
 
 const MOCK_DELAY = 300;
@@ -56,27 +56,38 @@ class FibonacciPRNG {
 
 const prng = new FibonacciPRNG(Date.now());
 
-const calculateSpinResult = (wager: number, currency: CurrencyType): { result: WinResult } => {
+const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: string): { result: WinResult } => {
+    
+    // 1. Get Game Specific Assets
+    const gameAssets = GAME_DATA[gameId] || GAME_DATA['default'];
+    const strips = gameAssets.strips;
+    const payouts = gameAssets.payouts;
+
     const generateOutcome = () => {
         const stopIndices = [
-            Math.floor(prng.next() * REEL_STRIPS[0].length),
-            Math.floor(prng.next() * REEL_STRIPS[1].length),
-            Math.floor(prng.next() * REEL_STRIPS[2].length)
+            Math.floor(prng.next() * strips[0].length),
+            Math.floor(prng.next() * strips[1].length),
+            Math.floor(prng.next() * strips[2].length)
         ];
 
         const grid: string[][] = [[], [], []];
+        let scatterCount = 0;
+
         for (let reelIdx = 0; reelIdx < 3; reelIdx++) {
-            const strip = REEL_STRIPS[reelIdx];
+            const strip = strips[reelIdx];
             const stopIndex = stopIndices[reelIdx];
             for (let rowIdx = 0; rowIdx < 3; rowIdx++) {
                 const symIndex = (stopIndex + rowIdx) % strip.length;
-                grid[rowIdx][reelIdx] = strip[symIndex];
+                const symbol = strip[symIndex];
+                grid[rowIdx][reelIdx] = symbol;
+                if (symbol === 'SCATTER') scatterCount++;
             }
         }
 
         let totalWin = 0;
         const winningLines = [];
         
+        // Check Paylines
         for (let i = 0; i < PAYLINES.length; i++) {
             const line = PAYLINES[i];
             const s1 = grid[line[0][0]][line[0][1]];
@@ -84,29 +95,43 @@ const calculateSpinResult = (wager: number, currency: CurrencyType): { result: W
             const s3 = grid[line[2][0]][line[2][1]];
 
             if (s1 === s2 && s2 === s3) {
-                const baseValue = PAYOUTS[s1] || 0;
+                const baseValue = payouts[s1] || 0;
                 const lineWin = wager * baseValue;
                 totalWin += lineWin;
-                winningLines.push({ lineIndex: i, symbol: s1, amount: lineWin });
+                if (lineWin > 0) {
+                    winningLines.push({ lineIndex: i, symbol: s1, amount: lineWin });
+                }
             }
         }
 
-        return { totalWin, winningLines, stopIndices };
+        return { totalWin, winningLines, stopIndices, scatterCount };
     };
 
     let finalOutcome;
 
+    // Simulate RNG Loop for mock consistency (not used in real server RNG)
     if (currency === CurrencyType.GC) {
-        const targetIsWin = prng.next() < 0.25; // 25% Win Rate
+        const targetIsWin = prng.next() < 0.25; 
         let attempts = 0;
         do {
             finalOutcome = generateOutcome();
-            const actualIsWin = finalOutcome.totalWin > 0;
+            const actualIsWin = finalOutcome.totalWin > 0 || finalOutcome.scatterCount >= 3;
             if (actualIsWin === targetIsWin) break;
             attempts++;
         } while (attempts < 50); 
     } else {
         finalOutcome = generateOutcome();
+    }
+    
+    // BONUS CHECK
+    let freeSpinsWon = 0;
+    let bonusText = '';
+    
+    if (finalOutcome.scatterCount >= 3) {
+        freeSpinsWon = 10;
+        bonusText = "BONUS! 10 FREE SPINS";
+        // Bonus payout (optional, usually scatter pays wager multiplier)
+        // finalOutcome.totalWin += wager * 5; 
     }
 
     return {
@@ -114,8 +139,8 @@ const calculateSpinResult = (wager: number, currency: CurrencyType): { result: W
             totalWin: finalOutcome.totalWin,
             winningLines: finalOutcome.winningLines,
             isBigWin: finalOutcome.totalWin >= wager * 10,
-            freeSpinsWon: 0,
-            bonusText: '',
+            freeSpinsWon: freeSpinsWon,
+            bonusText: bonusText,
             stopIndices: finalOutcome.stopIndices
         }
     };
@@ -335,7 +360,7 @@ export const supabaseService = {
 
   game: {
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string): Promise<{ user: UserProfile, result: WinResult }> => {
-        const math = calculateSpinResult(wager, currency);
+        const math = calculateSpinResult(wager, currency, gameId);
         const winAmount = math.result.totalWin;
         const idempotencyKey = generateIdempotencyKey();
         const tenantId = user.tenantId || DEMO_TENANT_ID;

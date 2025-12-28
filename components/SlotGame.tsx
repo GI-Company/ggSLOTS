@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GameConfig, CurrencyType, WinResult } from '../types';
-import { REEL_STRIPS, WAGER_LEVELS } from '../constants';
+import { GAME_DATA, WAGER_LEVELS } from '../constants';
 import { SlotReel } from './SlotReel';
 
 interface SlotGameProps {
@@ -28,6 +28,10 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
   const pendingWinAmount = useRef<number>(0);
 
   const currentWager = WAGER_LEVELS[currency][wagerIndex];
+  
+  // Get assets for current game
+  const gameAssets = GAME_DATA[game.id] || GAME_DATA['default'];
+  const reelStrips = gameAssets.strips;
 
   // 1. Sync visual balance ONLY when idle to prevent jumps during play
   useEffect(() => {
@@ -39,8 +43,8 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
 
   // Load initial random positions
   useEffect(() => {
-    setTargetIndices(REEL_STRIPS.map(strip => Math.floor(Math.random() * strip.length)));
-  }, []);
+    setTargetIndices(reelStrips.map(strip => Math.floor(Math.random() * strip.length)));
+  }, [game.id]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -49,10 +53,10 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
       };
   }, []);
 
-  const triggerWinCelebration = (amount: number, isBig: boolean) => {
+  const triggerWinCelebration = (amount: number, isBig: boolean, text: string) => {
       setWinState({
           amount: amount,
-          text: isBig ? "BIG WIN!" : "WINNER"
+          text: text || (isBig ? "BIG WIN!" : "WINNER")
       });
       pendingWinAmount.current = amount;
 
@@ -103,8 +107,10 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
                  setSpinning(false);
                  setStopping(false);
                  
-                 if (result.totalWin > 0) {
-                     triggerWinCelebration(result.totalWin, result.isBigWin);
+                 // Trigger Bonus Text or Regular Win
+                 if (result.totalWin > 0 || result.freeSpinsWon > 0) {
+                     const winText = result.bonusText ? result.bonusText : "";
+                     triggerWinCelebration(result.totalWin, result.isBigWin, winText);
                  }
              }, 800); 
 
@@ -173,7 +179,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
                 {/* Win Celebration Overlay */}
                 {winState && (
                     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 animate-in fade-in zoom-in duration-300 pointer-events-none">
-                        <h1 className="text-6xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)] animate-bounce font-display mb-2">
+                        <h1 className="text-6xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)] animate-bounce font-display mb-2 text-center leading-none">
                             {winState.text}
                         </h1>
                         <div className="text-4xl sm:text-5xl font-bold text-white drop-shadow-md">
@@ -183,7 +189,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
                 )}
 
                 {/* The Reels */}
-                {REEL_STRIPS.map((strip, i) => (
+                {reelStrips.map((strip, i) => (
                     <div key={i} className="flex-1 h-full max-w-[200px] relative bg-slate-900 rounded-lg overflow-hidden">
                         <SlotReel 
                             symbols={strip} 

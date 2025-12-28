@@ -1,15 +1,5 @@
+
 export const REEL_COUNT = 3;
-
-// Exact Reel Strips from original design
-export const REEL_STRIPS = [
-  ['💎','BONUS','🍒','🍊','🍋','🔔','🍒','⭐','🍉','🍒','🍋','🍊','BONUS','🍒','💎','🍉','🔔','🍊','🍋','🍒','⭐', '🍒', '🍋', '🍊', 'BONUS'],
-  ['🍒','🍊','🍋','🔔','BONUS','🍒','⭐','🍉','🍒','🍋','💎','🍊','BONUS','🍒','💎','🍉','🔔','🍊','🍋','🍒','⭐', '🍒', '🍋', '🍊', 'BONUS'],
-  ['💎','BONUS','🍒','🍊','🍋','🔔','🍒','⭐','🍉','🍒','🍋','🍊','BONUS','🍒','💎','🍉','🔔','🍊','🍋','🍒','⭐', '🍒', '🍋', '🍊', 'BONUS']
-];
-
-export const PAYOUTS: Record<string, number> = { 
-  '🍒': 2, '🍋': 4, '🍊': 6, '🍉': 8, '🔔': 20, '⭐': 40, '💎': 80, 'BONUS': 10 
-};
 
 // 5 Paylines: Top, Middle, Bottom, Diagonal TL-BR, Diagonal BL-TR
 export const PAYLINES = [ 
@@ -26,7 +16,6 @@ export const WAGER_LEVELS = {
 };
 
 export const GAMES_LIST = [
-  // isDemo: true allows play without account
   { id: 'cosmic-cash', title: 'Cosmic Cash', image: '400x500/1e293b/4f46e5?text=Cosmic+Cash', tag: 'New', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x5,000', isDemo: true },
   { id: 'pyramid-riches', title: 'Pyramid Riches', image: '400x500/1e293b/f59e0b?text=Pyramid+Riches', tag: 'Hot', volatility: 'High', minWager: '200 GC', maxWager: '2M GC', maxMultiplier: 'x10,000', isDemo: false },
   { id: 'viking-victory', title: 'Viking Victory', image: '400x500/1e293b/be185d?text=Viking+Victory', tag: '', volatility: 'Medium', minWager: '50 GC', maxWager: '500k GC', maxMultiplier: 'x2,500', isDemo: false },
@@ -44,3 +33,48 @@ export const COIN_PACKAGES = [
 
 export const REDEMPTION_UNLOCK_PRICE = 9.99;
 export const MIN_REDEMPTION = 50.00;
+
+// --- GAME SPECIFIC ASSETS ---
+
+interface GameData {
+    strips: string[][];
+    payouts: Record<string, number>;
+}
+
+// Fallback / Cosmic Theme
+const COSMIC_STRIPS = [
+  ['💎','SCATTER','🍒','🍊','🍋','🔔','🍒','⭐','🍉','🍒','🍋','🍊','SCATTER','🍒','💎','🍉','🔔','🍊','🍋','🍒','⭐', '🍒', '🍋', '🍊', 'SCATTER'],
+  ['🍒','🍊','🍋','🔔','SCATTER','🍒','⭐','🍉','🍒','🍋','💎','🍊','SCATTER','🍒','💎','🍉','🔔','🍊','🍋','🍒','⭐', '🍒', '🍋', '🍊', 'SCATTER'],
+  ['💎','SCATTER','🍒','🍊','🍋','🔔','🍒','⭐','🍉','🍒','🍋','🍊','SCATTER','🍒','💎','🍉','🔔','🍊','🍋','🍒','⭐', '🍒', '🍋', '🍊', 'SCATTER']
+];
+const COSMIC_PAYOUTS = { '🍒': 2, '🍋': 4, '🍊': 6, '🍉': 8, '🔔': 20, '⭐': 40, '💎': 80, 'SCATTER': 0 };
+
+// Egyptian Theme
+const PYRAMID_STRIPS = [
+    ['PHARAOH', 'SCATTER', 'ANKH', 'SCARAB', 'EYE', '10', 'J', 'Q', 'K', 'A', 'PHARAOH', 'SCARAB', 'SCATTER', 'ANKH'],
+    ['SCARAB', 'EYE', '10', 'J', 'Q', 'SCATTER', 'K', 'A', 'PHARAOH', 'ANKH', 'SCARAB', 'EYE', 'SCATTER', '10'],
+    ['EYE', 'SCATTER', '10', 'J', 'Q', 'K', 'A', 'PHARAOH', 'ANKH', 'SCARAB', 'SCATTER', 'EYE', 'PHARAOH', 'J']
+];
+const PYRAMID_PAYOUTS = { '10': 2, 'J': 3, 'Q': 4, 'K': 5, 'A': 6, 'SCARAB': 15, 'EYE': 25, 'ANKH': 50, 'PHARAOH': 100, 'SCATTER': 0 };
+
+// Viking Theme
+const VIKING_STRIPS = [
+    ['ODIN', 'SCATTER', 'AXE', 'SHIELD', 'HELMET', 'RUNE1', 'RUNE2', 'RUNE3', 'ODIN', 'AXE', 'SCATTER', 'SHIELD'],
+    ['SHIELD', 'HELMET', 'RUNE1', 'SCATTER', 'RUNE2', 'RUNE3', 'ODIN', 'AXE', 'SHIELD', 'HELMET', 'SCATTER', 'RUNE1'],
+    ['AXE', 'SCATTER', 'SHIELD', 'HELMET', 'RUNE1', 'RUNE2', 'RUNE3', 'ODIN', 'SCATTER', 'AXE', 'HELMET', 'RUNE2']
+];
+const VIKING_PAYOUTS = { 'RUNE1': 2, 'RUNE2': 3, 'RUNE3': 4, 'HELMET': 12, 'SHIELD': 20, 'AXE': 45, 'ODIN': 90, 'SCATTER': 0 };
+
+export const GAME_DATA: Record<string, GameData> = {
+    'cosmic-cash': { strips: COSMIC_STRIPS, payouts: COSMIC_PAYOUTS },
+    'pyramid-riches': { strips: PYRAMID_STRIPS, payouts: PYRAMID_PAYOUTS },
+    'viking-victory': { strips: VIKING_STRIPS, payouts: VIKING_PAYOUTS },
+    // Fallbacks for others
+    'ocean-fortune': { strips: COSMIC_STRIPS, payouts: COSMIC_PAYOUTS },
+    'dragon-hoard': { strips: COSMIC_STRIPS, payouts: COSMIC_PAYOUTS },
+    'default': { strips: COSMIC_STRIPS, payouts: COSMIC_PAYOUTS }
+};
+
+// Export current strips for the component to use (will need to be dynamic in future, handled by passed props now)
+export const REEL_STRIPS = COSMIC_STRIPS; 
+export const PAYOUTS = COSMIC_PAYOUTS;
