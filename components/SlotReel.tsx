@@ -7,9 +7,10 @@ interface SlotReelProps {
   targetIndex: number;
   isSpinning: boolean;
   reelIndex: number;
+  quickSpin: boolean;
 }
 
-export const SlotReel: React.FC<SlotReelProps> = ({ symbols, targetIndex, isSpinning, reelIndex }) => {
+export const SlotReel: React.FC<SlotReelProps> = ({ symbols, targetIndex, isSpinning, reelIndex, quickSpin }) => {
   // We replicate the strip 3 times to allow for smooth looping and buffer
   const displaySymbols = [...symbols, ...symbols, ...symbols];
   const stripLength = symbols.length;
@@ -24,6 +25,11 @@ export const SlotReel: React.FC<SlotReelProps> = ({ symbols, targetIndex, isSpin
   const finalIndex = stripLength + targetIndex;
   const finalTranslateY = -(finalIndex * symbolHeightPercent);
 
+  // Quick Spin timings vs Normal
+  const baseDuration = quickSpin ? 0.15 : 0.8;
+  const stagger = quickSpin ? 0.05 : 0.2;
+  const transitionDuration = baseDuration + (reelIndex * stagger);
+
   return (
     <div className="relative overflow-hidden w-full h-full bg-slate-900 rounded-lg shadow-inner border border-slate-700/50">
       {/* Glossy Overlay & CRT Scanline effect */}
@@ -34,8 +40,8 @@ export const SlotReel: React.FC<SlotReelProps> = ({ symbols, targetIndex, isSpin
         className="w-full will-change-transform"
         style={{
             transform: isSpinning ? 'none' : `translateY(${finalTranslateY}%)`,
-            animation: isSpinning ? `spinLoop 0.4s linear infinite` : 'none',
-            transition: isSpinning ? 'none' : `transform ${0.8 + (reelIndex * 0.2)}s cubic-bezier(0.19, 1, 0.22, 1)`
+            animation: isSpinning ? `spinLoop ${quickSpin ? 0.1 : 0.4}s linear infinite` : 'none',
+            transition: isSpinning ? 'none' : `transform ${transitionDuration}s cubic-bezier(0.19, 1, 0.22, 1)`
         }}
       >
          {displaySymbols.map((char, i) => (

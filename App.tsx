@@ -94,10 +94,10 @@ const App: React.FC = () => {
     alert(`Redemption of ${amount} SC request received!`);
   };
 
-  const handleGameSpin = async (wager: number): Promise<WinResult> => {
+  const handleGameSpin = async (wager: number, isFreeSpin: boolean = false): Promise<WinResult> => {
     if (!user) throw new Error("No user");
     const gameId = activeGame ? activeGame.id : 'unknown';
-    const { user: updatedUser, result } = await supabaseService.game.spin(user, wager, currency, gameId);
+    const { user: updatedUser, result } = await supabaseService.game.spin(user, wager, currency, gameId, isFreeSpin);
     setUser(updatedUser);
     return result;
   };

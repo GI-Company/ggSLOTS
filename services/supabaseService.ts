@@ -56,7 +56,7 @@ class FibonacciPRNG {
 
 const prng = new FibonacciPRNG(Date.now());
 
-const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: string): { result: WinResult } => {
+const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean): { result: WinResult } => {
     
     // 1. Get Game Specific Assets
     const gameAssets = GAME_DATA[gameId] || GAME_DATA['default'];
@@ -78,7 +78,22 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
             const stopIndex = stopIndices[reelIdx];
             for (let rowIdx = 0; rowIdx < 3; rowIdx++) {
                 const symIndex = (stopIndex + rowIdx) % strip.length;
-                const symbol = strip[symIndex];
+                let symbol = strip[symIndex];
+
+                // --- SCATTER DAMPENING LOGIC ---
+                // If we are in a Free Spin, reduce the probability of Scatters appearing 
+                // to prevent excessive re-triggers.
+                if (isFreeSpin && symbol === 'SCATTER') {
+                    // 85% chance to replace the Scatter with the next symbol in the strip
+                    if (prng.next() < 0.85) {
+                        symbol = strip[(symIndex + 1) % strip.length];
+                        // Double check we didn't just swap to another scatter (rare but possible in design)
+                        if (symbol === 'SCATTER') {
+                             symbol = strip[(symIndex + 2) % strip.length];
+                        }
+                    }
+                }
+
                 grid[rowIdx][reelIdx] = symbol;
                 if (symbol === 'SCATTER') scatterCount++;
             }
@@ -359,8 +374,9 @@ export const supabaseService = {
   },
 
   game: {
-    spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string): Promise<{ user: UserProfile, result: WinResult }> => {
-        const math = calculateSpinResult(wager, currency, gameId);
+    spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean = false): Promise<{ user: UserProfile, result: WinResult }> => {
+        // Pass isFreeSpin to calculation logic
+        const math = calculateSpinResult(wager, currency, gameId, isFreeSpin);
         const winAmount = math.result.totalWin;
         const idempotencyKey = generateIdempotencyKey();
         const tenantId = user.tenantId || DEMO_TENANT_ID;
@@ -372,7 +388,7 @@ export const supabaseService = {
                      p_user_id: user.id,
                      p_tenant_id: tenantId,
                      p_activity_id: gameId,
-                     p_debit: wager,
+                     p_debit: isFreeSpin ? 0 : wager, // 0 debit for free spins
                      p_credit: winAmount,
                      p_currency: currency,
                      p_idempotency_key: idempotencyKey
@@ -400,9 +416,11 @@ export const supabaseService = {
         
         const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
 
-        if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
-
-        updatedUser[balanceField] -= wager;
+        // Check funds only if not free spin
+        if (!isFreeSpin) {
+            if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
+            updatedUser[balanceField] -= wager;
+        }
 
         if (winAmount > 0) {
             updatedUser[balanceField] += winAmount;
@@ -413,7 +431,7 @@ export const supabaseService = {
             id: idempotencyKey,
             activityId: gameId,
             timestamp: Date.now(),
-            debit: wager,
+            debit: isFreeSpin ? 0 : wager,
             credit: winAmount,
             currency: currency,
             result: winAmount > 0 ? 'WIN' : 'LOSS'
