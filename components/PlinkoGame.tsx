@@ -1,0 +1,389 @@
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { GameConfig, CurrencyType, WinResult } from '../types';
+import { WAGER_LEVELS } from '../constants';
+import { supabaseService } from '../services/supabaseService';
+
+interface PlinkoGameProps {
+  game: GameConfig;
+  currency: CurrencyType;
+  balance: number;
+  onClose: () => void;
+  onSpin: (wager: number, isFreeSpin: boolean, plinkoConfig: { rows: number, risk: 'Low' | 'Medium' | 'High' }) => Promise<WinResult>;
+  isPaused: boolean;
+  onVisualBalanceChange: (balance: number | null) => void;
+}
+
+interface Ball {
+  id: number;
+  path: number[];
+  currentStep: number;
+  progress: number;
+  finished: boolean;
+  rotation: number;
+  winAmount: number;
+  multiplier: number;
+}
+
+interface ActivePeg {
+  r: number;
+  c: number;
+  opacity: number;
+}
+
+export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance, onClose, onSpin, isPaused, onVisualBalanceChange }) => {
+  const [wagerIndex, setWagerIndex] = useState(3);
+  
+  const [rowCount, setRowCount] = useState<number>(12); 
+  const [riskLevel, setRiskLevel] = useState<'Low' | 'Medium' | 'High'>('Medium');
+  
+  const [optimisticDebit, setOptimisticDebit] = useState(0);
+  const [pendingWins, setPendingWins] = useState(0);
+  const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(null);
+
+  const visualBalance = balance - pendingWins - optimisticDebit;
+
+  // Sync with Parent Header
+  useEffect(() => {
+     onVisualBalanceChange(visualBalance);
+     return () => onVisualBalanceChange(null);
+  }, [visualBalance, onVisualBalanceChange]);
+
+  const multipliers = useMemo(() => {
+      return supabaseService.game.getPlinkoMultipliers(rowCount, riskLevel);
+  }, [rowCount, riskLevel]);
+  
+  const gameStateRef = useRef({
+      balls: [] as Ball[],
+      pegs: [] as ActivePeg[]
+  });
+  const [renderState, setRenderState] = useState(gameStateRef.current);
+  const requestRef = useRef<number | undefined>(undefined);
+  const lastTimeRef = useRef<number | undefined>(undefined);
+  const ballIdCounter = useRef(0);
+
+  const currentWager = WAGER_LEVELS[currency][wagerIndex];
+
+  const startX = 50; 
+  const startY = 10; 
+  const rowHeight = 75 / rowCount; 
+  const colSpacing = 60 / rowCount;
+
+  const dropBall = async () => {
+      if (visualBalance < currentWager) { alert("Insufficient funds"); return; }
+      
+      setOptimisticDebit(prev => prev + currentWager);
+      
+      try {
+          const wagerForThisDrop = currentWager;
+          const winResult = await onSpin(wagerForThisDrop, false, { rows: rowCount, risk: riskLevel });
+          const outcome = winResult.plinkoOutcome;
+          
+          if (outcome) {
+              const winAmount = winResult.totalWin;
+              setOptimisticDebit(prev => prev - wagerForThisDrop);
+              setPendingWins(prev => prev + winAmount);
+
+              const newBall: Ball = {
+                  id: ballIdCounter.current++,
+                  path: outcome.path,
+                  currentStep: 0,
+                  progress: 0,
+                  finished: false,
+                  rotation: Math.random() * 360,
+                  winAmount: winAmount,
+                  multiplier: outcome.multiplier
+              };
+              
+              gameStateRef.current.balls.push(newBall);
+              gameStateRef.current.pegs.push({ r: 0, c: 0, opacity: 1.0 });
+          }
+      } catch (e) {
+          console.error(e);
+          setOptimisticDebit(prev => prev - currentWager);
+      }
+  };
+
+  const updatePhysics = (deltaTime: number) => {
+      const state = gameStateRef.current;
+      const speed = (0.0035 * (12 / rowCount)) * deltaTime; 
+
+      let ballsFinishedThisFrame: Ball[] = [];
+
+      state.balls.forEach(ball => {
+          if (ball.finished) return;
+
+          ball.progress += speed;
+          
+          const nextDir = ball.path[ball.currentStep] || 0; 
+          const rotSpeed = 15 * deltaTime * (nextDir === 1 ? 1 : -1);
+          ball.rotation += rotSpeed;
+
+          if (ball.progress >= 1) {
+              ball.progress = 0;
+              ball.currentStep++;
+
+              if (ball.currentStep >= rowCount) {
+                  ball.finished = true;
+                  ballsFinishedThisFrame.push(ball);
+              } else {
+                  const col = ball.path.slice(0, ball.currentStep).reduce((a, b) => a + b, 0);
+                  state.pegs.push({ r: ball.currentStep, c: col, opacity: 1.0 });
+              }
+          }
+      });
+
+      if (ballsFinishedThisFrame.length > 0) {
+          let totalReleasedWin = 0;
+          let latestWinInfo = null;
+
+          ballsFinishedThisFrame.forEach(ball => {
+               totalReleasedWin += ball.winAmount;
+               if (ball.winAmount > 0) {
+                   latestWinInfo = { amount: ball.winAmount, multiplier: ball.multiplier };
+               }
+          });
+          
+          if (totalReleasedWin > 0) {
+               setPendingWins(prev => prev - totalReleasedWin);
+          }
+          
+          if (latestWinInfo) {
+               setLastWin(latestWinInfo);
+               setTimeout(() => setLastWin(null), 1500);
+          }
+      }
+
+      state.balls = state.balls.filter(b => !b.finished);
+
+      state.pegs.forEach(peg => {
+          peg.opacity -= 0.05 * (deltaTime / 16);
+      });
+      state.pegs = state.pegs.filter(p => p.opacity > 0);
+  };
+
+  const animate = (time: number) => {
+    if (lastTimeRef.current !== undefined) {
+      const deltaTime = time - lastTimeRef.current;
+      const clampedDelta = Math.min(deltaTime, 50); 
+      
+      if (!isPaused) {
+          updatePhysics(clampedDelta);
+          setRenderState({ ...gameStateRef.current });
+      }
+    }
+    lastTimeRef.current = time;
+    requestRef.current = requestAnimationFrame(animate);
+  };
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(requestRef.current!);
+  }, [currentWager, isPaused, rowCount, riskLevel]); 
+
+  const getCoordinates = (r: number, c: number) => {
+      const xOffset = (c - r / 2) * colSpacing;
+      const x = startX + xOffset;
+      const y = startY + r * rowHeight;
+      return { x, y };
+  };
+
+  const renderPegs = () => {
+      const pegs = [];
+      for (let r = 0; r <= rowCount; r++) {
+          for (let c = 0; c <= r; c++) {
+              const { x, y } = getCoordinates(r, c);
+              const active = renderState.pegs.find(p => p.r === r && p.c === c);
+              const opacity = active ? active.opacity : 0;
+              
+              if (r < rowCount) {
+                  const pegSize = rowCount > 12 ? 'w-1 h-1' : 'w-2 h-2';
+                  pegs.push(
+                    <div key={`peg-${r}-${c}`} className="absolute w-0 h-0" style={{ left: `${x}%`, top: `${y}%` }}>
+                         <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${pegSize} bg-slate-400 rounded-full shadow-sm`} />
+                         <div className="absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-pink-500 rounded-full blur-sm transition-opacity duration-75" style={{ opacity: opacity }} />
+                         <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${pegSize} bg-white rounded-full transition-opacity duration-75`} style={{ opacity: opacity }} />
+                    </div>
+                  );
+              }
+          }
+      }
+      return pegs;
+  };
+
+  const renderBuckets = () => {
+      return multipliers.map((mult, i) => {
+          const center = rowCount / 2;
+          const dist = Math.abs(i - center);
+          let colorClass = 'bg-yellow-500';
+          const ratio = dist / (rowCount / 2);
+          
+          if (ratio < 0.3) colorClass = 'bg-green-500'; 
+          else if (ratio < 0.7) colorClass = 'bg-yellow-500'; 
+          else if (ratio < 0.9) colorClass = 'bg-orange-500'; 
+          else colorClass = 'bg-red-600'; 
+
+          const { x, y } = getCoordinates(rowCount, i);
+          const width = rowCount > 12 ? 'w-6' : 'w-8';
+          const fontSize = rowCount > 12 ? 'text-[7px]' : 'text-[9px]';
+
+          return (
+              <div 
+                key={`bucket-${i}`} 
+                className={`
+                    absolute ${width} h-8 -translate-x-1/2 -translate-y-1/2 
+                    flex items-center justify-center rounded-md 
+                    ${fontSize} font-bold text-slate-900 shadow-lg 
+                    ${colorClass} border border-white/20 transition-all duration-300
+                `} 
+                style={{ left: `${x}%`, top: `${y}%` }}
+              >
+                  {mult}x
+              </div>
+          );
+      });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
+        <div className="relative w-full max-w-6xl h-[90vh] bg-slate-900 rounded-3xl border-4 border-pink-500/50 shadow-2xl flex flex-col md:flex-row overflow-hidden">
+             {isPaused && (
+                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
+                    <h2 className="text-3xl font-bold text-white font-display">PAUSED</h2>
+                </div>
+            )}
+
+            <div className="md:w-72 bg-slate-950 p-6 flex flex-col gap-6 border-r border-slate-800 z-20">
+                <div className="flex items-center justify-between">
+                    <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <h2 className="text-xl font-bold text-white font-display tracking-wider text-pink-500">PLINKO</h2>
+                </div>
+
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                    <div className="text-xs text-slate-500 font-bold uppercase mb-1">Current Balance</div>
+                    <div className="text-2xl font-black text-white font-display tabular-nums tracking-tight">
+                        {currency === 'GC' ? Math.floor(visualBalance).toLocaleString() : visualBalance.toFixed(2)}
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs text-slate-400 font-bold uppercase block mb-2">Risk Level</label>
+                        <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg">
+                            {(['Low', 'Medium', 'High'] as const).map(lvl => (
+                                <button
+                                    key={lvl}
+                                    onClick={() => setRiskLevel(lvl)}
+                                    className={`py-2 rounded text-xs font-bold transition-all ${riskLevel === lvl ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    {lvl}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="flex justify-between mb-2">
+                             <label className="text-xs text-slate-400 font-bold uppercase block">Rows</label>
+                             <span className="text-xs font-bold text-white">{rowCount}</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="8" max="16" step="1"
+                            value={rowCount}
+                            onChange={(e) => setRowCount(parseInt(e.target.value))}
+                            className="w-full accent-pink-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                        />
+                         <div className="flex justify-between text-[10px] text-slate-600 font-bold mt-1">
+                            <span>8</span><span>12</span><span>16</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-400 font-bold uppercase block mb-2">Bet Amount</label>
+                        <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-1">
+                             <button 
+                                disabled={wagerIndex === 0}
+                                onClick={() => setWagerIndex(i => i - 1)}
+                                className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 text-white font-bold"
+                            >-</button>
+                            <div className="flex-1 text-center font-bold text-white tabular-nums">
+                                {currency === 'GC' ? currentWager.toLocaleString() : currentWager.toFixed(2)}
+                            </div>
+                            <button 
+                                 disabled={wagerIndex === WAGER_LEVELS[currency].length - 1}
+                                 onClick={() => setWagerIndex(i => i + 1)}
+                                 className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 text-white font-bold"
+                            >+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-auto">
+                    <button 
+                        onClick={dropBall}
+                        className="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white font-black text-xl rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] transform active:scale-[0.98] transition-all"
+                    >
+                        DROP BALL
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex-1 relative bg-slate-900 overflow-hidden flex flex-col">
+                <div className="flex-1 relative">
+                     <div className="absolute inset-0 bg-[linear-gradient(rgba(236,72,153,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(236,72,153,0.05)_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+                     
+                     {renderPegs()}
+                     {renderBuckets()}
+                     
+                     {renderState.balls.map(ball => {
+                        const r = ball.currentStep;
+                        const c = ball.path.slice(0, ball.currentStep).reduce((a, b) => a + b, 0); 
+                        const startPos = getCoordinates(r, c);
+                        
+                        const nextDir = ball.path[ball.currentStep] || 0; 
+                        const nextC = c + nextDir;
+                        const nextR = r + 1;
+                        const endPos = getCoordinates(nextR, nextC);
+
+                        const p = ball.progress;
+                        const x = startPos.x + (endPos.x - startPos.x) * p;
+                        const y = startPos.y + (endPos.y - startPos.y) * (p * p);
+                        const arc = Math.sin(p * Math.PI) * (20 / rowCount); 
+                        const finalY = y - arc;
+
+                        const ballSize = rowCount > 12 ? 'w-2 h-2' : 'w-3 h-3';
+
+                        return (
+                            <div 
+                                key={ball.id} 
+                                className={`absolute ${ballSize} bg-pink-500 rounded-full shadow-[0_0_10px_#ec4899] z-10 will-change-transform`}
+                                style={{ 
+                                    left: `${x}%`, 
+                                    top: `${finalY}%`,
+                                    transform: `translate(-50%, -50%) rotate(${ball.rotation}deg)` 
+                                }} 
+                            >
+                                <div className="w-full h-full bg-white/30 rounded-full scale-50 ml-[1px] mt-[1px]"></div>
+                            </div>
+                        );
+                    })}
+
+                    {lastWin && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-900/95 border border-green-500 px-8 py-6 rounded-2xl text-center animate-in zoom-in fade-in duration-200 shadow-[0_0_50px_rgba(34,197,94,0.4)] z-50 pointer-events-none">
+                            <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-green-300 to-green-600 font-display mb-2 drop-shadow-sm">
+                                {lastWin.multiplier}x
+                            </div>
+                            <div className="text-white font-bold text-xl">
+                                +{currency === 'GC' ? Math.floor(lastWin.amount).toLocaleString() : lastWin.amount.toFixed(2)}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};

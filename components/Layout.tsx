@@ -12,14 +12,14 @@ interface LayoutProps {
   onLogin: () => void;
   onRegister: () => void;
   onLogout: () => void;
-  // Lifted state for App control
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  visualBalanceOverride?: number | null;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ 
     children, user, currency, setCurrency, currentView, setView, onLogin, onRegister, onLogout,
-    sidebarCollapsed, setSidebarCollapsed
+    sidebarCollapsed, setSidebarCollapsed, visualBalanceOverride
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -58,6 +58,10 @@ export const Layout: React.FC<LayoutProps> = ({
         </button>
     );
   };
+
+  const displayBalance = visualBalanceOverride !== undefined && visualBalanceOverride !== null
+    ? visualBalanceOverride
+    : (user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0);
 
   return (
     <div className="flex h-screen bg-[#020617] text-slate-100 overflow-hidden font-sans">
@@ -168,8 +172,8 @@ export const Layout: React.FC<LayoutProps> = ({
                                 </span>
                                 <span className={`font-black font-display text-white tabular-nums text-lg leading-none shadow-black drop-shadow-md`}>
                                     {currency === CurrencyType.GC 
-                                        ? user.gcBalance.toLocaleString() 
-                                        : user.scBalance.toFixed(2)}
+                                        ? Math.floor(displayBalance).toLocaleString() 
+                                        : displayBalance.toFixed(2)}
                                 </span>
                             </div>
                         </div>

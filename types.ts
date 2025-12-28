@@ -57,6 +57,13 @@ export interface WinResult {
   freeSpinsWon: number;
   bonusText: string;
   stopIndices: number[]; // Critical for aligning visuals with math
+  plinkoOutcome?: {
+      path: number[]; // 0 (Left) or 1 (Right) direction for each row
+      bucketIndex: number;
+      multiplier: number;
+      rows: number;
+      risk: 'Low' | 'Medium' | 'High';
+  };
 }
 
 // Updated to match 'transaction_events' table in SQL

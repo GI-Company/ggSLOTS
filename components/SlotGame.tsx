@@ -224,8 +224,13 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
         
         {/* Game Frame */}
-        <div className={`relative w-full max-w-5xl aspect-[4/5] sm:aspect-[4/3] md:aspect-[16/9] bg-slate-900 rounded-3xl border-4 shadow-2xl flex flex-col overflow-hidden transition-colors duration-500 ${isBonusActive ? 'border-yellow-500 shadow-yellow-500/20' : 'border-indigo-500/50'}`}>
-            
+        <div 
+            className={`
+                relative w-full max-w-5xl aspect-[4/5] sm:aspect-[4/3] md:aspect-[16/9] 
+                bg-slate-900 rounded-3xl border-4 shadow-2xl flex flex-col overflow-hidden transition-colors duration-500 
+                ${isBonusActive ? 'border-yellow-500 shadow-yellow-500/20' : 'border-indigo-500/50'}
+            `}
+        >
             {/* Bonus Mode Indicator Overlay */}
             {isBonusActive && (
                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-red-500 to-yellow-500 animate-shimmer z-30"></div>
@@ -241,12 +246,12 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
             )}
 
             {/* Top Bar */}
-            <div className="flex-none h-16 bg-slate-800/80 border-b border-indigo-500/30 flex justify-between items-center px-6 z-20">
+            <div className="flex-none h-16 bg-slate-800/80 border-b border-indigo-500/30 flex justify-between items-center px-6 z-20 backdrop-blur-md">
                 <div className="flex items-center gap-2">
                     <button onClick={onClose} disabled={spinning || isBonusActive} className="p-2 hover:bg-slate-700 rounded-full transition-colors disabled:opacity-50">
                         <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
-                    <h2 className="text-xl font-bold text-white font-display uppercase tracking-wider hidden sm:block">{game.title}</h2>
+                    <h2 className="text-xl font-bold text-white font-display uppercase tracking-wider hidden sm:block shadow-black drop-shadow-md">{game.title}</h2>
                 </div>
                 
                 {/* Center Message for Bonus */}
@@ -267,7 +272,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
             </div>
 
             {/* Reels Viewport */}
-            <div className="flex-1 relative bg-black p-4 sm:p-8 flex items-center justify-center gap-2 sm:gap-4 overflow-hidden">
+            <div className={`flex-1 relative p-4 sm:p-8 flex items-center justify-center gap-2 sm:gap-4 overflow-hidden bg-black`}>
                 {/* Payline Indicators */}
                 <div className="absolute top-1/2 left-0 w-full h-1 bg-yellow-400/20 pointer-events-none z-0"></div>
 
@@ -298,7 +303,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
             </div>
 
             {/* Bottom Controls */}
-            <div className="flex-none h-24 bg-slate-800 border-t border-indigo-500/30 flex items-center justify-between px-4 sm:px-8 gap-4 z-20">
+            <div className="flex-none h-24 bg-slate-800/90 backdrop-blur-md border-t border-indigo-500/30 flex items-center justify-between px-4 sm:px-8 gap-4 z-20">
                 
                 {/* Wager Controls */}
                 <div className="flex flex-col items-center">
