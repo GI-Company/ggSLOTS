@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GameConfig, CurrencyType, WinResult } from '../types';
 import { GAME_DATA, WAGER_LEVELS } from '../constants';
@@ -24,7 +23,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
   const [winState, setWinState] = useState<{ amount: number; text: string } | null>(null);
   
   // Refs to manage timers and latent state
-  const winTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const winTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingWinAmount = useRef<number>(0);
 
   const currentWager = WAGER_LEVELS[currency][wagerIndex];
