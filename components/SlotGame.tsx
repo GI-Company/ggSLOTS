@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameConfig, CurrencyType, WinResult } from '../types';
 import { REEL_STRIPS, WAGER_LEVELS } from '../constants';
 import { SlotReel } from './SlotReel';
@@ -10,118 +10,81 @@ interface SlotGameProps {
   balance: number;
   onClose: () => void;
   onSpin: (wager: number) => Promise<WinResult>;
-  isPaused: boolean; // Pause state prop
+  isPaused: boolean;
 }
 
 export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onClose, onSpin, isPaused }) => {
   const [wagerIndex, setWagerIndex] = useState(3);
   const [spinning, setSpinning] = useState(false);
-  const [stopping, setStopping] = useState(false); 
+  const [stopping, setStopping] = useState(false);
   const [targetIndices, setTargetIndices] = useState([0, 0, 0]);
+  
+  // Local Visual Balance to handle animations without jumping
+  const [visualBalance, setVisualBalance] = useState(balance);
   const [winState, setWinState] = useState<{ amount: number; text: string } | null>(null);
+  
+  // Refs to manage timers and latent state
+  const winTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingWinAmount = useRef<number>(0);
 
   const currentWager = WAGER_LEVELS[currency][wagerIndex];
+
+  // 1. Sync visual balance ONLY when idle to prevent jumps during play
+  useEffect(() => {
+    // We only sync if we are NOT spinning, NOT stopping, and NOT celebrating a win
+    if (!spinning && !stopping && !winState) {
+        setVisualBalance(balance);
+    }
+  }, [balance, spinning, stopping, winState]);
 
   // Load initial random positions
   useEffect(() => {
     setTargetIndices(REEL_STRIPS.map(strip => Math.floor(Math.random() * strip.length)));
   }, []);
 
-  const handleInteraction = async () => {
-      // 1. If currently spinning but not stopping, this is a "Skill Stop"
-      if (spinning && !stopping) {
-          setStopping(true);
-          return;
-      }
-      
-      // 2. Normal Spin Logic
-      if (spinning) return; // Prevent double clicks
-      
-      // Balance Check
-      if (balance < currentWager) {
-        alert("Insufficient Balance!");
-        return;
-    }
+  // Cleanup timers on unmount
+  useEffect(() => {
+      return () => {
+          if (winTimerRef.current) clearTimeout(winTimerRef.current);
+      };
+  }, []);
 
-    // Reset & Lock State
-    setWinState(null);
-    setSpinning(true);
-    setStopping(false);
+  const triggerWinCelebration = (amount: number, isBig: boolean) => {
+      setWinState({
+          amount: amount,
+          text: isBig ? "BIG WIN!" : "WINNER"
+      });
+      pendingWinAmount.current = amount;
 
-    try {
-        // Request Spin Result (Parallel with minimum animation time)
-        const minSpinTime = new Promise(resolve => setTimeout(resolve, 500)); // Shorter min time to allow fast stop
-        const spinRequest = onSpin(currentWager);
-        
-        const [result] = await Promise.all([spinRequest, minSpinTime]);
-
-        // Set Targets
-        setTargetIndices(result.stopIndices);
-
-        // If user hasn't clicked Stop yet, we auto-stop after some time, 
-        // OR we wait for user. For a real feel, let's auto-stop if no interaction after 2s.
-        // We set a flag to see if component is still spinning without stop.
-        setTimeout(() => {
-            setStopping(prev => {
-                if (!prev) return true; // Auto stop if not already stopped
-                return prev;
-            });
-        }, 2000);
-
-        // Calculate when to show win (based on visual stop)
-        // Since 'stopping' triggers CSS transition which takes ~0.6s
-        // We watch the 'stopping' state in effect.
-
-    } catch (error) {
-        console.error("Spin Error:", error);
-        setSpinning(false);
-        setStopping(true);
-        alert("Something went wrong. Please try again.");
-    }
+      // Auto-collect after 3 seconds
+      winTimerRef.current = setTimeout(() => {
+          collectWin();
+      }, 3000);
   };
 
-  // Effect to handle win display timing after 'stopping' becomes true
-  useEffect(() => {
-      if (stopping) {
-          const timer = setTimeout(() => {
-              setSpinning(false);
-              // We need the result here, but handleInteraction scope lost it.
-              // However, 'targetIndices' are updated. We could re-calc win or just store it.
-              // Since handleInteraction doesn't persist 'result' to state, we need a better way.
-              // Actually, wait. onSpin returns the result. 
-              // We can't access result here easily unless we stored it in state.
-              // Let's refactor handleInteraction slightly to store result in a ref or state.
-          }, 1000); // Wait for reel CSS transition
-          return () => clearTimeout(timer);
+  const collectWin = () => {
+      if (winTimerRef.current) clearTimeout(winTimerRef.current);
+      winTimerRef.current = null;
+      
+      if (pendingWinAmount.current > 0) {
+          setVisualBalance(prev => prev + pendingWinAmount.current);
+          pendingWinAmount.current = 0;
       }
-  }, [stopping]);
-  
-  // FIX: We need to know the result to show the Win Amount.
-  // The previous implementation had a logic flaw where result was local scope.
-  // Let's modify handleInteraction to set a pending result state.
-  const [pendingResult, setPendingResult] = useState<WinResult | null>(null);
-  
-  useEffect(() => {
-      if (!spinning && pendingResult && stopping) {
-          if (pendingResult.totalWin > 0) {
-            setWinState({
-                amount: pendingResult.totalWin,
-                text: pendingResult.isBigWin ? "BIG WIN!" : "WINNER"
-            });
-          }
-          setPendingResult(null); // Clear after showing
-      }
-  }, [spinning, stopping, pendingResult]);
+      setWinState(null);
+  };
 
-
-  // Redefine handleSpin to be robust
   const executeSpin = async () => {
+    // Use actual prop balance for validation to ensure server/client sync
     if (balance < currentWager) { alert("Insufficient Balance!"); return; }
     
-    setWinState(null);
+    // Clear any existing win state immediately if user "Skipped"
+    if (winState) collectWin();
+
+    // 1. Visual Deduct
+    setVisualBalance(prev => prev - currentWager);
+    
     setSpinning(true);
     setStopping(false);
-    setPendingResult(null);
 
     try {
         const minSpinTime = new Promise(resolve => setTimeout(resolve, 300));
@@ -129,23 +92,42 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
         const [result] = await Promise.all([spinRequest, minSpinTime]);
         
         setTargetIndices(result.stopIndices);
-        setPendingResult(result);
-
-        // Auto stop timer
+        
+        // Auto stop sequence
         setTimeout(() => {
-             setStopping(s => true);
+             // Triggers the CSS transition in Reel component
+             setStopping(true);
+             
+             // Wait for Reel CSS transition (approx 0.8s) then finish
+             setTimeout(() => {
+                 setSpinning(false);
+                 setStopping(false);
+                 
+                 if (result.totalWin > 0) {
+                     triggerWinCelebration(result.totalWin, result.isBigWin);
+                 }
+             }, 800); 
+
         }, 2000);
         
     } catch (e) {
+        console.error(e);
         setSpinning(false);
-        setStopping(true);
+        setStopping(false);
+        // Sync back on error
+        setVisualBalance(balance); 
     }
   };
 
   const handleClick = () => {
+      // 1. Skill Stop
       if (spinning && !stopping) {
           setStopping(true);
-      } else if (!spinning) {
+          return;
+      } 
+      
+      // 2. Start Spin (works even if celebrating - "Fast Play")
+      if (!spinning) {
           executeSpin();
       }
   };
@@ -177,7 +159,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
                     <div className="bg-slate-950 px-4 py-2 rounded-lg border border-slate-700 shadow-inner">
                         <span className="text-slate-500 mr-2">BAL</span>
                         <span className="text-white tabular-nums">
-                            {currency === 'GC' ? Math.floor(balance).toLocaleString() : balance.toFixed(2)}
+                            {currency === 'GC' ? Math.floor(visualBalance).toLocaleString() : visualBalance.toFixed(2)}
                         </span>
                     </div>
                 </div>
@@ -185,7 +167,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
 
             {/* Reels Viewport */}
             <div className="flex-1 relative bg-black p-4 sm:p-8 flex items-center justify-center gap-2 sm:gap-4 overflow-hidden">
-                {/* Payline Indicators (Simple overlay for center line) */}
+                {/* Payline Indicators */}
                 <div className="absolute top-1/2 left-0 w-full h-1 bg-yellow-400/20 pointer-events-none z-0"></div>
 
                 {/* Win Celebration Overlay */}
@@ -203,9 +185,6 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
                 {/* The Reels */}
                 {REEL_STRIPS.map((strip, i) => (
                     <div key={i} className="flex-1 h-full max-w-[200px] relative bg-slate-900 rounded-lg overflow-hidden">
-                         {/* We pass 'spinning && !stopping' to control the animation state. 
-                             True = Infinite Spin Animation. 
-                             False = CSS Transition to Target. */}
                         <SlotReel 
                             symbols={strip} 
                             targetIndex={targetIndices[i]} 
@@ -255,7 +234,6 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, onC
                              }
                         `}
                     >
-                        {/* Shine Effect (Only when idle) */}
                         {!spinning && <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-20deg] group-hover:animate-shine" />}
                         
                         {spinning && !stopping ? (

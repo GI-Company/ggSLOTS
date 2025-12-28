@@ -203,9 +203,6 @@ export const supabaseService = {
                 return { data: existingUser as UserProfile, error: null };
             } else if (profileData) {
                 // Registration Logic
-                // Note: In a real app, you would use supabase.auth.signUp() here.
-                // We assume the user creates the auth entry, then we insert the profile.
-                // For this demo structure, we act as if auth is handled and just insert profile.
                 const { data: newUser, error } = await supabase
                     .from('profiles')
                     .insert([{ email, ...profileData }])
@@ -216,8 +213,6 @@ export const supabaseService = {
                 return { data: newUser as UserProfile, error: null, message: "Registration successful!" };
             }
         } catch (e: any) {
-            // If the table doesn't exist or connection fails, we might want to alert the developer
-            // But for now, if Supabase is misconfigured, we return error.
             return { data: null, error: e.message || "Connection Error" };
         }
       }
@@ -297,8 +292,6 @@ export const supabaseService = {
     },
 
     getSession: async (): Promise<UserProfile | null> => {
-      // 1. If Supabase is active, we ONLY check Supabase session.
-      // We do NOT fall back to local storage 'STORAGE_KEY' to prevent "ghost" sessions.
       if (supabase) {
           try {
               const { data: { session } } = await supabase.auth.getSession();
@@ -311,10 +304,32 @@ export const supabaseService = {
               return null;
           }
       }
-      // 2. Mock Fallback
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) return JSON.parse(stored);
       return null;
+    },
+
+    /**
+     * Realtime: Subscribe to User Profile Changes
+     */
+    subscribeToUserChanges: (userId: string, callback: (payload: UserProfile) => void) => {
+        if (!supabase) return () => {};
+        
+        const channel = supabase
+            .channel(`public:profiles:id=eq.${userId}`)
+            .on('postgres_changes', 
+                { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, 
+                (payload) => {
+                    if (payload.new) {
+                        callback(payload.new as UserProfile);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
   },
 
@@ -326,7 +341,6 @@ export const supabaseService = {
         const tenantId = user.tenantId || DEMO_TENANT_ID;
 
         // CRITICAL: We only use Supabase RPC if the client exists AND the user is NOT a guest.
-        // Guests always run locally to save DB costs.
         if (supabase && !user.isGuest) {
              try {
                  const { error } = await supabase.rpc('execute_atomic_transaction', {
@@ -351,7 +365,6 @@ export const supabaseService = {
 
              } catch (e) {
                  console.error("Transaction Failed:", e);
-                 // Fallback? No, for real money/SC logic, we must fail if DB fails.
                  throw new Error("Transaction failed. Please try again.");
              }
         } 
@@ -382,12 +395,10 @@ export const supabaseService = {
         };
 
         const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
-        // Only persist to local storage if we are in mock mode OR it's a guest
         if (!supabase || user.isGuest) {
              localStorage.setItem(storageKey, JSON.stringify(updatedUser));
         }
         
-        // Local History
         const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY) || '[]';
         const history = JSON.parse(storedHistory);
         history.unshift(historyEntry);
@@ -423,6 +434,39 @@ export const supabaseService = {
         await new Promise(resolve => setTimeout(resolve, 200));
         const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
         return storedHistory ? JSON.parse(storedHistory) : [];
+    },
+
+    /**
+     * Realtime: Subscribe to Transaction History
+     */
+    subscribeToHistory: (callback: (entry: GameHistoryEntry) => void) => {
+        if (!supabase) return () => {};
+
+        const channel = supabase
+            .channel('public:transaction_events')
+            .on('postgres_changes', 
+                { event: 'INSERT', schema: 'public', table: 'transaction_events' }, 
+                (payload) => {
+                    const row = payload.new;
+                    // Filter logic is usually handled by RLS on Supabase side, 
+                    // ensuring we only receive our own rows.
+                    const entry: GameHistoryEntry = {
+                         id: row.id,
+                         activityId: row.activity_id,
+                         timestamp: new Date(row.created_at).getTime(),
+                         debit: row.debit_amount,
+                         credit: row.credit_amount,
+                         currency: row.currency,
+                         result: row.result === 'WIN' ? 'WIN' : 'LOSS'
+                    };
+                    callback(entry);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
   },
 

@@ -25,10 +25,18 @@ export const HistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Initial Fetch
         supabaseService.game.getHistory().then(data => {
             setHistory(data);
             setLoading(false);
         });
+
+        // Realtime Subscription
+        const unsubscribe = supabaseService.game.subscribeToHistory((newEntry) => {
+            setHistory(prev => [newEntry, ...prev]);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     return (

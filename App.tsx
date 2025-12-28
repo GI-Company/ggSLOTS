@@ -25,6 +25,18 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Realtime Subscription for Profile Updates
+  useEffect(() => {
+    if (user && !user.isGuest) {
+        // Subscribe to changes on the profile (e.g. Balance updates from DB)
+        const unsubscribe = supabaseService.auth.subscribeToUserChanges(user.id, (updatedProfile) => {
+            // We merge to keep local flags if necessary, but generally DB source is truth
+            setUser(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+        });
+        return () => unsubscribe();
+    }
+  }, [user?.id, user?.isGuest]);
+
   // Clear notification after 5s
   useEffect(() => {
       if(notification) {
