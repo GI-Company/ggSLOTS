@@ -148,7 +148,7 @@ export const RedeemModal: React.FC<{ onClose: () => void; user: UserProfile; onR
 // --- Auth Modal (Login/Register/Reset) ---
 interface AuthModalProps {
     onClose: () => void; 
-    onAuth: (email: string, profileData?: any) => void; 
+    onAuth: (email: string, password?: string, profileData?: any) => void; 
     type: 'login' | 'register';
 }
 
@@ -184,7 +184,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, type: ini
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        onAuth(email); // Login uses email only in mock, pass in current app flow
+        onAuth(email, password); 
     };
 
     const handleRegister = (e: React.FormEvent) => {
@@ -219,7 +219,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, type: ini
             zip
         };
 
-        onAuth(email, profileData);
+        onAuth(email, password, profileData);
     };
 
     const handleForgotPassword = async (e: React.FormEvent) => {

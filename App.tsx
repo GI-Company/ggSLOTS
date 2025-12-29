@@ -48,8 +48,8 @@ const App: React.FC = () => {
       }
   }, [notification]);
 
-  const handleAuth = async (email: string, profileData?: any) => {
-    const { data, message, error } = await supabaseService.auth.signIn(email, profileData);
+  const handleAuth = async (email: string, password?: string, profileData?: any) => {
+    const { data, message, error } = await supabaseService.auth.signIn(email, password, profileData);
     if (error) { alert(error); return; }
     if(data) setUser(data);
     if(message) setNotification(message);

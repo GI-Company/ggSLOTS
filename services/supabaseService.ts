@@ -264,6 +264,21 @@ const mapDBGameToState = (data: any): BlackjackState => {
 export const supabaseService = {
   auth: {
       signInAsGuest: async (): Promise<{ user: UserProfile, message?: string }> => {
+        // Real Guest Login (Anonymous Auth) if Supabase configured
+        if (supabase) {
+            try {
+                const { data, error } = await supabase.auth.signInAnonymously();
+                if (!error && data.session) {
+                    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.session.user.id).single();
+                    if (profile) return { user: profile as UserProfile, message: "Welcome Guest!" };
+                }
+            } catch (e) {
+                // Fallback to mock if Anonymous sign-ins are disabled on Supabase
+                console.warn("Anon Auth failed, falling back to mock");
+            }
+        }
+        
+        // Mock Fallback
         await new Promise(resolve => setTimeout(resolve, 200));
         let guestUser: UserProfile;
         let message = undefined;
@@ -281,18 +296,51 @@ export const supabaseService = {
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestUser));
         return { user: guestUser, message };
     },
-    signIn: async (email: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
+    
+    signIn: async (email: string, password?: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
       if (supabase) {
         try {
-            const { data: existingUser } = await supabase.from('profiles').select('*').eq('email', email).single();
-            if (existingUser) return { data: existingUser as UserProfile, error: null };
-            else if (profileData) {
-                const { data: newUser, error } = await supabase.from('profiles').insert([{ email, ...profileData }]).select().single();
+            if (profileData && password) {
+                // REGISTER FLOW
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password: password,
+                    options: {
+                        data: profileData // Passes metadata to auth.users (useful for triggers)
+                    }
+                });
                 if (error) throw error;
-                return { data: newUser as UserProfile, error: null, message: "Registration successful!" };
+                
+                // If email confirmation is required, session might be null.
+                if (data.user && !data.session) {
+                    return { data: null, error: null, message: "Registration successful! Please check your email to verify account." };
+                }
+
+                if (data.user) {
+                     // Fetch created profile (Assuming Trigger created it, or we allow a moment)
+                     await new Promise(r => setTimeout(r, 1000)); // Slight delay for trigger
+                     const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+                     return { data: profile as UserProfile, error: null, message: "Welcome to GGSlots!" };
+                }
+            } else if (password) {
+                // LOGIN FLOW
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                if (error) throw error;
+
+                if (data.user) {
+                    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+                    return { data: profile as UserProfile, error: null, message: "Welcome back!" };
+                }
             }
-        } catch (e: any) { return { data: null, error: e.message || "Connection Error" }; }
+        } catch (e: any) { 
+            return { data: null, error: e.message || "Connection Error" }; 
+        }
       }
+
+      // Mock Fallback
       await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
       const stored = localStorage.getItem(STORAGE_KEY);
       let user: UserProfile;
@@ -312,9 +360,25 @@ export const supabaseService = {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
       return { data: user, error: null, message };
     },
+
     resetPassword: async (email: string) => { if (supabase) { const { error } = await supabase.auth.resetPasswordForEmail(email); if (error) return { success: false, message: error.message }; } return { success: true, message: "Reset link sent." }; },
+    
     signOut: async () => { if (supabase) await supabase.auth.signOut(); localStorage.removeItem(STORAGE_KEY); },
-    getSession: async () => { if (supabase) { try { const { data: { session } } = await supabase.auth.getSession(); if (session) { const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single(); return data as UserProfile; } } catch (e) { return null; } } const stored = localStorage.getItem(STORAGE_KEY); return stored ? JSON.parse(stored) : null; },
+    
+    getSession: async () => { 
+        if (supabase) { 
+            try { 
+                const { data: { session } } = await supabase.auth.getSession(); 
+                if (session) { 
+                    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single(); 
+                    return data as UserProfile; 
+                } 
+            } catch (e) { return null; } 
+        } 
+        const stored = localStorage.getItem(STORAGE_KEY); 
+        return stored ? JSON.parse(stored) : null; 
+    },
+    
     subscribeToUserChanges: (userId: string, callback: (payload: UserProfile) => void) => { 
         if (!supabase) return () => {}; 
         
