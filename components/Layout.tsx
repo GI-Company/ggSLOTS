@@ -15,11 +15,12 @@ interface LayoutProps {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   visualBalanceOverride?: number | null;
+  openLegalModal: (type: 'terms' | 'privacy' | 'responsible') => void;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ 
     children, user, currency, setCurrency, currentView, setView, onLogin, onRegister, onLogout,
-    sidebarCollapsed, setSidebarCollapsed, visualBalanceOverride
+    sidebarCollapsed, setSidebarCollapsed, visualBalanceOverride, openLegalModal
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -212,15 +213,17 @@ export const Layout: React.FC<LayoutProps> = ({
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
                     
-                    <button 
-                        onClick={() => setView('main')} 
-                        className="p-2 text-slate-400 hover:text-white transition-colors hover:bg-slate-800 rounded-lg group"
-                        title="Back to Lobby"
-                    >
-                        <svg className="w-6 h-6 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                    </button>
+                    {currentView !== 'main' && (
+                        <button 
+                            onClick={() => setView('main')} 
+                            className="p-2 text-slate-400 hover:text-white transition-colors hover:bg-slate-800 rounded-lg group"
+                            title="Back to Lobby"
+                        >
+                            <svg className="w-6 h-6 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                    )}
                     
                     {/* Breadcrumb / Title */}
                     <div className="hidden sm:block h-6 w-[1px] bg-slate-800 mx-2"></div>
@@ -269,7 +272,7 @@ export const Layout: React.FC<LayoutProps> = ({
             </header>
 
             {/* View Content */}
-            <main className="flex-1 overflow-y-auto relative bg-[#020617] scroll-smooth z-10">
+            <main className="flex-1 overflow-y-auto relative bg-[#020617] scroll-smooth z-10 flex flex-col">
                 <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
                     <div className="star" style={{top:'15%', left:'25%', width:'2px', height:'2px', animationDelay:'0s'}}></div>
                     <div className="star" style={{top:'45%', left:'75%', width:'3px', height:'3px', animationDelay:'1.5s'}}></div>
@@ -277,9 +280,36 @@ export const Layout: React.FC<LayoutProps> = ({
                     <div className="star" style={{top:'10%', left:'80%', width:'1px', height:'1px', animationDelay:'2s'}}></div>
                     <div className="star" style={{top:'60%', left:'50%', width:'2px', height:'2px', animationDelay:'4s'}}></div>
                 </div>
-                <div className="relative z-10 pb-20">
+                
+                <div className="relative z-10 flex-1">
                     {children}
                 </div>
+
+                {/* --- FOOTER --- */}
+                <footer className="relative z-20 border-t border-slate-800 bg-slate-950/80 p-8 mt-12">
+                    <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div className="text-slate-500 text-sm">
+                            &copy; 2023 GGSlots. All rights reserved.
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-6 text-sm font-bold text-slate-400">
+                            <button onClick={() => openLegalModal('terms')} className="hover:text-white transition-colors">Terms of Service</button>
+                            <button onClick={() => openLegalModal('privacy')} className="hover:text-white transition-colors">Privacy Policy</button>
+                            <button onClick={() => setView('sweeps-rules')} className="hover:text-white transition-colors">Sweeps Rules</button>
+                            <button onClick={() => openLegalModal('responsible')} className="hover:text-white transition-colors">Responsible Gaming</button>
+                        </div>
+                        <div className="flex gap-4 opacity-50">
+                            <div className="w-8 h-8 rounded bg-slate-800"></div>
+                            <div className="w-8 h-8 rounded bg-slate-800"></div>
+                            <div className="w-8 h-8 rounded bg-slate-800"></div>
+                        </div>
+                    </div>
+                    <div className="max-w-4xl mx-auto mt-8 text-center text-[10px] text-slate-600 leading-relaxed">
+                        NO PURCHASE NECESSARY to enter Sweepstakes. VOID WHERE PROHIBITED BY LAW. 
+                        GGSlots is a social casino. Gold Coins have no monetary value. Sweeps Cash can be redeemed for real prizes subject to terms and verification.
+                        Available only in US & Canada (Excluding WA, MI, MT, CA, NY, CT, NV, LA, NJ).
+                        Must be 18+ to play.
+                    </div>
+                </footer>
             </main>
         </div>
     </div>

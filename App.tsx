@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, CurrencyType, ViewType, GameConfig, WinResult } from './types';
 import { supabaseService } from './services/supabaseService';
+import { geoService } from './services/geoService';
 import { Layout } from './components/Layout';
 import { Lobby } from './components/Lobby';
 import { SlotGame } from './components/SlotGame';
@@ -10,6 +11,8 @@ import { BlackjackGame } from './components/BlackjackGame';
 import { ScratchGame } from './components/ScratchGame';
 import { PokerGame } from './components/PokerGame';
 import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
+import { GeoBlock } from './components/GeoBlock';
+import { TermsModal, PrivacyModal, ResponsibleGamingModal } from './components/Legal';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -20,16 +23,29 @@ const App: React.FC = () => {
   const [showKyc, setShowKyc] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   
+  // Compliance & Legal
+  const [isGeoBlocked, setIsGeoBlocked] = useState(false);
+  const [blockedRegion, setBlockedRegion] = useState<string | undefined>(undefined);
+  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | 'responsible' | null>(null);
+
   // App-level control of sidebar state to handle game pausing/collapsing
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   // New: Visual Balance Override for syncing Header with Game Optimistic UI
   const [visualBalanceOverride, setVisualBalanceOverride] = useState<number | null>(null);
 
-  // Initialize Session
+  // Initialize Session & Geo-Check
   useEffect(() => {
     supabaseService.auth.getSession().then(session => {
         if(session) setUser(session);
+    });
+
+    // Check Geolocation
+    geoService.checkCompliance().then(status => {
+        if (!status.allowed) {
+            setIsGeoBlocked(true);
+            setBlockedRegion(status.region);
+        }
     });
   }, []);
 
@@ -179,6 +195,10 @@ const App: React.FC = () => {
     );
   };
 
+  if (isGeoBlocked) {
+      return <GeoBlock region={blockedRegion} />;
+  }
+
   return (
     <Layout 
         user={user} 
@@ -192,6 +212,7 @@ const App: React.FC = () => {
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
         visualBalanceOverride={visualBalanceOverride}
+        openLegalModal={(type) => setLegalModal(type)}
     >
         {renderContent()}
 
@@ -212,6 +233,11 @@ const App: React.FC = () => {
         {showKyc && user && (
             <KycModal onClose={() => setShowKyc(false)} user={user} onStatusUpdate={handleKycUpdate} />
         )}
+
+        {/* Legal Modals */}
+        {legalModal === 'terms' && <TermsModal onClose={() => setLegalModal(null)} />}
+        {legalModal === 'privacy' && <PrivacyModal onClose={() => setLegalModal(null)} />}
+        {legalModal === 'responsible' && <ResponsibleGamingModal onClose={() => setLegalModal(null)} />}
 
         {/* --- GAME ROUTES --- */}
 

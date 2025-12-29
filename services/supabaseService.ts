@@ -568,7 +568,7 @@ export const supabaseService = {
   game: {
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean = false, plinkoConfig?: { rows: number, risk: 'Low' | 'Medium' | 'High' }): Promise<{ user: UserProfile, result: WinResult }> => {
         let math: { result: WinResult };
-        if (gameId === 'plinko') {
+        if (gameId.includes('plinko')) {
              const rows = plinkoConfig?.rows || 12;
              const risk = plinkoConfig?.risk || 'Medium';
              math = calculatePlinkoResult(wager, rows, risk);
@@ -581,7 +581,7 @@ export const supabaseService = {
         if (supabase && !user.isGuest) {
              try {
                  const { data, error } = await supabase.rpc('execute_atomic_transaction', {
-                     game_type: gameId === 'plinko' ? 'plinko' : 'slot',
+                     game_type: gameId.includes('plinko') ? 'plinko' : 'slot',
                      currency: currency,
                      wager_amount: isFreeSpin ? 0 : wager,
                      payout_amount: winAmount,

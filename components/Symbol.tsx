@@ -23,8 +23,8 @@ export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, c
         );
     }
 
-    // --- EGYPTIAN THEME ---
     switch (name) {
+        // --- EGYPTIAN ---
         case 'PHARAOH':
             return (
                 <svg viewBox="0 0 100 100" className={className}>
@@ -47,16 +47,148 @@ export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, c
                     <path d="M25 50 L5 30 M75 50 L95 30 M25 70 L5 90 M75 70 L95 90" stroke="#FFD700" strokeWidth="4"/>
                 </svg>
             );
-        case 'EYE':
+        
+        // --- WILD WEST ---
+        case 'SHERIFF': case '🤠':
             return (
                 <svg viewBox="0 0 100 100" className={className}>
-                    <path d="M20 50 Q50 20 80 50 Q50 80 20 50 Z" stroke="#000" strokeWidth="3" fill="#FFF"/>
-                    <circle cx="50" cy="50" r="10" fill="#000"/>
-                    <path d="M50 80 L50 90 M20 50 L10 50" stroke="#000" strokeWidth="3"/>
+                    <polygon points="50,10 60,35 85,35 65,55 75,80 50,65 25,80 35,55 15,35 40,35" fill="#FFD700" stroke="#DAA520" strokeWidth="2"/>
+                    <circle cx="50" cy="50" r="5" fill="#DAA520" />
+                    <circle cx="50" cy="50" r="2" fill="#000" />
                 </svg>
             );
-        
-        // --- VIKING THEME ---
+        case 'GUN': case '🔫':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M10 60 L30 60 L30 40 L80 40 L80 50 L30 50 L30 80 L10 80 Z" fill="#708090" stroke="#000" strokeWidth="2"/>
+                    <rect x="35" y="35" width="40" height="10" fill="#2F4F4F"/>
+                </svg>
+            );
+        case 'CACTUS': case '🌵':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M45 90 L45 30 Q45 10 55 30 L55 90" stroke="#228B22" strokeWidth="15" strokeLinecap="round" fill="none"/>
+                    <path d="M45 60 Q20 60 20 40" stroke="#228B22" strokeWidth="10" strokeLinecap="round" fill="none"/>
+                    <path d="M55 50 Q80 50 80 30" stroke="#228B22" strokeWidth="10" strokeLinecap="round" fill="none"/>
+                </svg>
+            );
+        case 'MONEY': case '💰':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M20 30 Q50 10 80 30 L90 80 Q50 95 10 80 Z" fill="#DEB887" stroke="#8B4513" strokeWidth="2"/>
+                    <text x="50" y="65" fontSize="40" textAnchor="middle" fill="#006400" fontWeight="bold">$</text>
+                </svg>
+            );
+
+        // --- HORROR ---
+        case 'GHOST': case '👻':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M20 90 L20 40 Q50 0 80 40 L80 90 L70 80 L60 90 L50 80 L40 90 L30 80 Z" fill="#E0FFFF" stroke="#ADD8E6" strokeWidth="2"/>
+                    <circle cx="35" cy="40" r="5" fill="#000"/>
+                    <circle cx="65" cy="40" r="5" fill="#000"/>
+                    <ellipse cx="50" cy="60" rx="10" ry="15" fill="#000"/>
+                </svg>
+            );
+        case 'VAMPIRE': case '🧛':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M30 30 Q50 10 70 30 L70 70 Q50 90 30 70 Z" fill="#FFF0F5" stroke="#000" strokeWidth="1"/>
+                    <path d="M30 30 L20 20 L30 50 Z" fill="#000"/>
+                    <path d="M70 30 L80 20 L70 50 Z" fill="#000"/>
+                    <path d="M40 75 L45 85 L55 85 L60 75" fill="none" stroke="#8B0000" strokeWidth="2"/>
+                    <path d="M42 65 L45 75 L55 75 L58 65" fill="#FFF" stroke="#000"/>
+                </svg>
+            );
+        case 'SPIDER': case '🕷️':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="50" cy="50" r="15" fill="#000"/>
+                    <path d="M50 50 L20 20 M50 50 L80 20 M50 50 L20 50 M50 50 L80 50 M50 50 L20 80 M50 50 L80 80" stroke="#000" strokeWidth="3"/>
+                    <circle cx="45" cy="45" r="2" fill="red"/>
+                    <circle cx="55" cy="45" r="2" fill="red"/>
+                </svg>
+            );
+
+        // --- ZEUS / GREEK ---
+        case 'ZEUS': case '⚡':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M55 10 L25 50 L45 50 L35 90 L65 50 L45 50 Z" fill="#00BFFF" stroke="#FFD700" strokeWidth="2" filter="url(#glowBonus)"/>
+                </svg>
+            );
+        case 'TEMPLE': case '🏛️':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <rect x="10" y="80" width="80" height="10" fill="#FFF8DC" stroke="#8B4513"/>
+                    <rect x="20" y="30" width="10" height="50" fill="#FFF8DC" stroke="#8B4513"/>
+                    <rect x="45" y="30" width="10" height="50" fill="#FFF8DC" stroke="#8B4513"/>
+                    <rect x="70" y="30" width="10" height="50" fill="#FFF8DC" stroke="#8B4513"/>
+                    <path d="M10 30 L50 10 L90 30 Z" fill="#FFF8DC" stroke="#8B4513"/>
+                </svg>
+            );
+
+        // --- OCEAN ---
+        case 'SHARK': case '🦈':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M20 50 Q50 20 80 50 Q50 80 20 50" fill="#708090" />
+                    <path d="M50 20 L40 5 L60 20" fill="#708090"/>
+                    <circle cx="35" cy="45" r="3" fill="#000"/>
+                    <path d="M60 50 L70 45 L70 55 Z" fill="#FFF"/>
+                </svg>
+            );
+        case 'TRIDENT': case '🔱':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M50 90 L50 30 M30 30 L30 20 Q50 40 70 20 L70 30" stroke="#FFD700" strokeWidth="5" strokeLinecap="round" fill="none"/>
+                    <path d="M30 20 L30 10 M50 30 L50 10 M70 20 L70 10" stroke="#FFD700" strokeWidth="5" strokeLinecap="round"/>
+                </svg>
+            );
+        case 'OCTOPUS': case '🐙':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="50" cy="40" r="20" fill="#800080"/>
+                    <path d="M30 50 Q20 80 40 80 M50 60 Q50 90 50 90 M70 50 Q80 80 60 80" stroke="#800080" strokeWidth="5" fill="none"/>
+                    <circle cx="45" cy="40" r="3" fill="#FFF"/>
+                    <circle cx="55" cy="40" r="3" fill="#FFF"/>
+                </svg>
+            );
+
+        // --- JUNGLE ---
+        case 'MONKEY': case '🐵':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="30" cy="40" r="10" fill="#8B4513" />
+                    <circle cx="70" cy="40" r="10" fill="#8B4513" />
+                    <circle cx="50" cy="50" r="30" fill="#8B4513" />
+                    <ellipse cx="50" cy="60" rx="15" ry="10" fill="#F4A460" />
+                    <circle cx="40" cy="45" r="4" fill="#000" />
+                    <circle cx="60" cy="45" r="4" fill="#000" />
+                </svg>
+             );
+        case 'TIGER': case '🐯':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="50" cy="50" r="35" fill="#FF8C00" />
+                    <path d="M20 50 L30 60 M80 50 L70 60" stroke="#000" strokeWidth="2" />
+                    <path d="M45 80 L55 80" stroke="#000" strokeWidth="3" />
+                    <circle cx="35" cy="45" r="4" fill="#000" />
+                    <circle cx="65" cy="45" r="4" fill="#000" />
+                    <path d="M50 20 L50 35 M30 30 L40 40 M70 30 L60 40" stroke="#000" strokeWidth="2" />
+                </svg>
+             );
+        case 'PARROT': case '🦜':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M40 20 Q70 20 60 50 L50 80" stroke="#FF0000" strokeWidth="20" strokeLinecap="round" fill="none" />
+                    <circle cx="50" cy="30" r="15" fill="#FF0000" />
+                    <path d="M50 30 L65 35 L50 40" fill="#FFFF00" />
+                    <circle cx="45" cy="25" r="3" fill="#000" />
+                </svg>
+             );
+
+        // --- VIKING ---
         case 'ODIN':
             return (
                 <svg viewBox="0 0 100 100" className={className}>
@@ -86,9 +218,141 @@ export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, c
                     <path d="M30 60 L20 40 M70 60 L80 40" stroke="#FFF" strokeWidth="4"/>
                 </svg>
             );
-            
+
+        // --- DOGS ---
+        case 'DOG': case '🐕': case '🐶':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="50" cy="50" r="35" fill="#A0522D" />
+                    <circle cx="35" cy="40" r="5" fill="#fff" />
+                    <circle cx="65" cy="40" r="5" fill="#fff" />
+                    <ellipse cx="50" cy="65" rx="10" ry="8" fill="#000" />
+                    <path d="M20 30 Q10 50 30 60" fill="#A0522D" stroke="#555" strokeWidth="2" />
+                    <path d="M80 30 Q90 50 70 60" fill="#A0522D" stroke="#555" strokeWidth="2" />
+                </svg>
+            );
+        case 'BONE': case '🦴':
+            return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M20 40 Q10 40 10 50 Q10 60 20 60 L80 60 Q90 60 90 50 Q90 40 80 40 Z" fill="#FFF" stroke="#CCC" strokeWidth="2" />
+                    <circle cx="15" cy="45" r="8" fill="#FFF" stroke="#CCC" />
+                    <circle cx="15" cy="55" r="8" fill="#FFF" stroke="#CCC" />
+                    <circle cx="85" cy="45" r="8" fill="#FFF" stroke="#CCC" />
+                    <circle cx="85" cy="55" r="8" fill="#FFF" stroke="#CCC" />
+                </svg>
+            );
+        case 'HOUSE':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M20 50 L50 20 L80 50 L80 90 L20 90 Z" fill="#B22222" stroke="#000" strokeWidth="2" />
+                    <rect x="40" y="60" width="20" height="30" fill="#000" rx="10" />
+                </svg>
+             );
+
+        // --- CANDY ---
+        case 'CANDY': case '🍬':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="50" cy="50" r="25" fill="#FF69B4" />
+                    <path d="M25 50 L5 30 L5 70 Z" fill="#FF1493" />
+                    <path d="M75 50 L95 30 L95 70 Z" fill="#FF1493" />
+                </svg>
+             );
+        case 'LOLLIPOP': case '🍭':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="50" cy="40" r="30" fill="#FF4500" />
+                    <circle cx="50" cy="40" r="20" fill="#FFFF00" />
+                    <circle cx="50" cy="40" r="10" fill="#00CED1" />
+                    <rect x="45" y="70" width="10" height="30" fill="#FFF" />
+                </svg>
+             );
+
+        // --- CHILLI ---
+        case 'CHILLI': case '🌶️':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M60 20 Q90 20 80 50 Q60 90 40 80 Q20 70 60 20 Z" fill="#FF0000" stroke="#8B0000" strokeWidth="2" />
+                    <path d="M60 20 Q50 10 70 10" stroke="#006400" strokeWidth="4" fill="none" />
+                </svg>
+             );
+        case 'HOTSAUCE':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M35 90 L35 40 L45 30 L55 30 L65 40 L65 90 Z" fill="#FF4500" stroke="#000" strokeWidth="2" />
+                    <rect x="40" y="50" width="20" height="30" fill="#FFF" />
+                    <circle cx="50" cy="65" r="5" fill="red" />
+                </svg>
+             );
+
+        // --- AZTEC ---
+        case 'MASK': case '👺':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <rect x="30" y="20" width="40" height="60" fill="#CD853F" rx="5" stroke="#8B4513" strokeWidth="2" />
+                    <circle cx="40" cy="40" r="5" fill="#000" />
+                    <circle cx="60" cy="40" r="5" fill="#000" />
+                    <path d="M40 70 Q50 80 60 70" stroke="#000" strokeWidth="2" fill="none" />
+                </svg>
+             );
+        case 'TEMPLE':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M10 90 L90 90 L80 70 L20 70 Z" fill="#8B4513" />
+                    <path d="M20 70 L80 70 L70 50 L30 50 Z" fill="#A0522D" />
+                    <path d="M30 50 L70 50 L60 30 L40 30 Z" fill="#CD853F" />
+                    <rect x="45" y="30" width="10" height="10" fill="#000" />
+                </svg>
+             );
+
+        // --- ASIAN ---
+        case 'DRAGON':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <path d="M20 50 Q30 20 50 30 Q70 20 80 50 Q70 80 50 70 Q30 80 20 50" fill="#DC143C" stroke="#FFD700" strokeWidth="2"/>
+                    <circle cx="40" cy="45" r="3" fill="#FFF"/>
+                    <circle cx="60" cy="45" r="3" fill="#FFF"/>
+                </svg>
+             );
+        case 'PANDA': case '🐼':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <circle cx="30" cy="30" r="10" fill="#000"/>
+                    <circle cx="70" cy="30" r="10" fill="#000"/>
+                    <circle cx="50" cy="50" r="30" fill="#FFF" stroke="#000" strokeWidth="2"/>
+                    <circle cx="40" cy="45" r="5" fill="#000"/>
+                    <circle cx="60" cy="45" r="5" fill="#000"/>
+                    <ellipse cx="50" cy="60" rx="5" ry="3" fill="#000"/>
+                </svg>
+             );
+        case 'LANTERN': case '🏮':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <rect x="45" y="10" width="10" height="10" fill="#FFD700"/>
+                    <rect x="25" y="20" width="50" height="60" rx="10" fill="#DC143C"/>
+                    <path d="M25 35 L75 35 M25 50 L75 50 M25 65 L75 65" stroke="#8B0000" strokeWidth="2"/>
+                    <path d="M40 80 L40 90 M50 80 L50 90 M60 80 L60 90" stroke="#FFD700" strokeWidth="2"/>
+                </svg>
+             );
+
+        // --- NEON / CLASSIC ---
+        case '7':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <text x="50" y="80" fontSize="80" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" fill="none" stroke="#FF0000" strokeWidth="4" filter="url(#glowBonus)">7</text>
+                    <text x="50" y="80" fontSize="80" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" fill="#FF0000">7</text>
+                </svg>
+             );
+        case 'BAR':
+             return (
+                <svg viewBox="0 0 100 100" className={className}>
+                    <rect x="10" y="35" width="80" height="30" rx="5" fill="#FFD700" stroke="#000" strokeWidth="2"/>
+                    <text x="50" y="58" fontSize="20" fontWeight="900" textAnchor="middle" fill="#000">BAR</text>
+                </svg>
+             );
+
         // --- TEXT SYMBOLS (Low Value) ---
-        case '10': case 'J': case 'Q': case 'K': case 'A':
+        case '10': case 'J': case 'Q': case 'K': case 'A': case 'B': case 'C':
         case 'RUNE1': case 'RUNE2': case 'RUNE3':
             return (
                 <svg viewBox="0 0 100 100" className={className}>
@@ -97,11 +361,10 @@ export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, c
                     </text>
                 </svg>
             );
-    }
-
-    // --- COSMIC THEME (Legacy) ---
-    switch (name) {
+            
+        // --- COSMIC THEME (Legacy) ---
         case '💎':
+        case 'DIAMOND':
             return (
                 <svg viewBox="0 0 100 100" className={className}>
                     <defs><filter id="glow1"><feGaussianBlur stdDeviation="3.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
@@ -112,6 +375,7 @@ export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, c
                 </svg>
             );
         case '🔔':
+        case 'BELL':
             return (
                 <svg viewBox="0 0 100 100" className={className}>
                     <defs><filter id="glow2"><feGaussianBlur stdDeviation="3.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
@@ -157,6 +421,6 @@ export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, c
                 </svg>
             );
         default:
-            return <div className="text-4xl text-white font-bold flex items-center justify-center h-full w-full">{name}</div>;
+            return <div className="text-2xl sm:text-4xl text-white font-bold flex items-center justify-center h-full w-full opacity-80">{name}</div>;
     }
 }

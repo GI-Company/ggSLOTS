@@ -37,8 +37,6 @@ interface GameData {
 }
 
 // THEME GENERATORS
-// We use a generator to create variations of math models so we don't have 2000 lines of hardcoded arrays.
-
 const BASE_SYMBOLS = ['🍒', '🍋', '🍊', '🍉', '🔔', '⭐', '💎', 'SCATTER'];
 const EGYPT_SYMBOLS = ['10', 'J', 'Q', 'K', 'A', 'SCARAB', 'PHARAOH', 'SCATTER'];
 const WILD_SYMBOLS = ['🌵', '🔫', '🤠', '💰', '🐴', '🥃', 'SHERIFF', 'SCATTER'];
@@ -48,11 +46,17 @@ const HORROR_SYMBOLS = ['🕯️', '⚰️', '🕷️', '🕸️', '🧛', '🧟
 const JUNGLE_SYMBOLS = ['🌿', '🐍', '🦜', '🐵', '🐯', '🗿', '🏝️', 'SCATTER'];
 const OCEAN_SYMBOLS = ['🐚', '🦀', '🐠', '🐙', '🦈', '🧜‍♀️', '🔱', 'SCATTER'];
 const ZEUS_SYMBOLS = ['🏺', '🛡️', '⚔️', '🏛️', '⚡', '🦅', 'ZEUS', 'SCATTER'];
+// New Sets
+const NEON_SYMBOLS = ['A', 'B', 'C', '7', 'BAR', 'BELL', 'DIAMOND', 'SCATTER'];
+const ASIAN_SYMBOLS = ['🎋', '🏮', '💴', '🧧', '🐢', '🐼', 'DRAGON', 'SCATTER'];
+const AZTEC_SYMBOLS = ['🌽', '🗿', '🐆', '🦅', '👺', '🔥', 'TEMPLE', 'SCATTER'];
+const DOG_SYMBOLS = ['🦴', '🎾', '🐕', '🐩', '🐶', '🥩', 'HOUSE', 'SCATTER'];
+const CHILLI_SYMBOLS = ['🌮', '🌵', '🌶️', '🎸', '☀️', '💃', 'HOTSAUCE', 'SCATTER'];
 
 const generateStrips = (symbols: string[], volatility: 'Low' | 'Medium' | 'High'): string[][] => {
     // Basic logic: Higher volatility = fewer high value symbols in strips
     const strips: string[][] = [[], [], []];
-    const len = 30; // Strip length
+    const len = 60; // Increased strip length for more variance
 
     for(let r=0; r<3; r++) {
         for(let i=0; i<len; i++) {
@@ -60,12 +64,17 @@ const generateStrips = (symbols: string[], volatility: 'Low' | 'Medium' | 'High'
             let symIndex = 0;
             
             if (volatility === 'High') {
-                if (rand < 0.05) symIndex = 7; // Scatter (Rare)
-                else if (rand < 0.15) symIndex = 6; // Top Symbol
-                else if (rand < 0.25) symIndex = 5;
-                else symIndex = Math.floor(Math.random() * 5); // Low symbols
+                if (rand < 0.04) symIndex = 7; // Scatter (Very Rare)
+                else if (rand < 0.10) symIndex = 6; // Jackpot Symbol
+                else if (rand < 0.20) symIndex = 5;
+                else symIndex = Math.floor(Math.random() * 5); // Low symbols mostly
+            } else if (volatility === 'Medium') {
+                 if (rand < 0.08) symIndex = 7; // Scatter
+                 else if (rand < 0.18) symIndex = 6;
+                 else symIndex = Math.floor(Math.random() * 6);
             } else {
-                 if (rand < 0.10) symIndex = 7; // Scatter (Common)
+                 // Low Volatility: More balanced
+                 if (rand < 0.12) symIndex = 7; // Scatter (Common)
                  else if (rand < 0.25) symIndex = 6;
                  else symIndex = Math.floor(Math.random() * 6);
             }
@@ -76,26 +85,30 @@ const generateStrips = (symbols: string[], volatility: 'Low' | 'Medium' | 'High'
 };
 
 const generatePayouts = (symbols: string[], volatility: 'Low' | 'Medium' | 'High') => {
-    const mult = volatility === 'High' ? 2 : 1;
+    const mult = volatility === 'High' ? 1.5 : (volatility === 'Low' ? 0.8 : 1);
     return {
         [symbols[0]]: 2 * mult,
         [symbols[1]]: 4 * mult,
-        [symbols[2]]: 6 * mult,
+        [symbols[2]]: 5 * mult,
         [symbols[3]]: 8 * mult,
         [symbols[4]]: 15 * mult,
-        [symbols[5]]: 30 * mult,
-        [symbols[6]]: 100 * mult, // Jackpot Symbol
+        [symbols[5]]: 40 * mult,
+        [symbols[6]]: 150 * mult, // Jackpot Symbol
         'SCATTER': 0
     };
 };
 
+// FULLY MAPPED GAME DATA
 export const GAME_DATA: Record<string, GameData> = {
+    // Existing
     'cosmic-cash': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') },
     'pyramid-riches': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
     'viking-victory': { strips: generateStrips(['RUNE1', 'RUNE2', 'RUNE3', 'HELMET', 'SHIELD', 'AXE', 'ODIN', 'SCATTER'], 'Medium'), payouts: generatePayouts(['RUNE1', 'RUNE2', 'RUNE3', 'HELMET', 'SHIELD', 'AXE', 'ODIN', 'SCATTER'], 'Medium') },
-    
-    // NEW SLOTS DATA
-    'neon-nights': { strips: generateStrips(BASE_SYMBOLS, 'High'), payouts: generatePayouts(BASE_SYMBOLS, 'High') },
+    'ocean-fortune': { strips: generateStrips(OCEAN_SYMBOLS, 'Low'), payouts: generatePayouts(OCEAN_SYMBOLS, 'Low') },
+    'dragon-hoard': { strips: generateStrips(ASIAN_SYMBOLS, 'High'), payouts: generatePayouts(ASIAN_SYMBOLS, 'High') },
+
+    // New Mappings
+    'neon-nights': { strips: generateStrips(NEON_SYMBOLS, 'High'), payouts: generatePayouts(NEON_SYMBOLS, 'High') },
     'buffalo-stampede': { strips: generateStrips(WILD_SYMBOLS, 'High'), payouts: generatePayouts(WILD_SYMBOLS, 'High') },
     'fruit-frenzy': { strips: generateStrips(FRUIT_SYMBOLS, 'Low'), payouts: generatePayouts(FRUIT_SYMBOLS, 'Low') },
     'jokers-jewels': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') },
@@ -103,18 +116,18 @@ export const GAME_DATA: Record<string, GameData> = {
     'cleos-gold': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
     'zeus-thunder': { strips: generateStrips(ZEUS_SYMBOLS, 'High'), payouts: generatePayouts(ZEUS_SYMBOLS, 'High') },
     '777-deluxe': { strips: generateStrips(BASE_SYMBOLS, 'Low'), payouts: generatePayouts(BASE_SYMBOLS, 'Low') },
-    'panda-fortune': { strips: generateStrips(JUNGLE_SYMBOLS, 'Medium'), payouts: generatePayouts(JUNGLE_SYMBOLS, 'Medium') },
-    'chilli-heat': { strips: generateStrips(WILD_SYMBOLS, 'Medium'), payouts: generatePayouts(WILD_SYMBOLS, 'Medium') },
+    'panda-fortune': { strips: generateStrips(ASIAN_SYMBOLS, 'Medium'), payouts: generatePayouts(ASIAN_SYMBOLS, 'Medium') },
+    'chilli-heat': { strips: generateStrips(CHILLI_SYMBOLS, 'Medium'), payouts: generatePayouts(CHILLI_SYMBOLS, 'Medium') },
     'sweet-bonanza': { strips: generateStrips(CANDY_SYMBOLS, 'High'), payouts: generatePayouts(CANDY_SYMBOLS, 'High') },
     'dead-or-alive': { strips: generateStrips(WILD_SYMBOLS, 'High'), payouts: generatePayouts(WILD_SYMBOLS, 'High') },
     'starburst-xx': { strips: generateStrips(BASE_SYMBOLS, 'Low'), payouts: generatePayouts(BASE_SYMBOLS, 'Low') },
-    'gonzos-quest': { strips: generateStrips(EGYPT_SYMBOLS, 'Medium'), payouts: generatePayouts(EGYPT_SYMBOLS, 'Medium') },
+    'gonzos-quest': { strips: generateStrips(AZTEC_SYMBOLS, 'Medium'), payouts: generatePayouts(AZTEC_SYMBOLS, 'Medium') },
     'book-of-dead': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
     'rise-of-olympus': { strips: generateStrips(ZEUS_SYMBOLS, 'High'), payouts: generatePayouts(ZEUS_SYMBOLS, 'High') },
     'fire-joker': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') },
     'legacy-of-dead': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
     'mustang-gold': { strips: generateStrips(WILD_SYMBOLS, 'Medium'), payouts: generatePayouts(WILD_SYMBOLS, 'Medium') },
-    'the-dog-house': { strips: generateStrips(CANDY_SYMBOLS, 'High'), payouts: generatePayouts(CANDY_SYMBOLS, 'High') },
+    'the-dog-house': { strips: generateStrips(DOG_SYMBOLS, 'High'), payouts: generatePayouts(DOG_SYMBOLS, 'High') },
     'underwater-gold': { strips: generateStrips(OCEAN_SYMBOLS, 'Medium'), payouts: generatePayouts(OCEAN_SYMBOLS, 'Medium') },
     'halloween-fortune': { strips: generateStrips(HORROR_SYMBOLS, 'Medium'), payouts: generatePayouts(HORROR_SYMBOLS, 'Medium') },
     
