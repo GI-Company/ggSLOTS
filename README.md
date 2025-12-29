@@ -4,6 +4,7 @@
 **A high-concurrency, ACID-compliant gaming platform built on PostgreSQL and React.**
 
 > **Architecture Status:** Production Ready (RPC-Only Write Pattern)
+> **Deployment Target:** Vercel (Edge Network)
 > **License:** MIT
 
 ---
@@ -15,122 +16,99 @@ This application strictly follows a **"Zero-Trust Client"** architecture. No bus
 ```mermaid
 graph TD
     User[User Client] -->|1. Auth (JWT)| Auth[Supabase Auth]
-    User -->|2. Read Data (SELECT)| RLS[Row Level Security]
-    User -->|3. Game Action (RPC)| API[Postgres Stored Procedures]
+    User -->|2. Crypto Payment| NOW[NOWPayments Widget]
     
     subgraph "The Trusted Core (PostgreSQL)"
-        API -->|Lock Row| Wallets[(Wallets Table)]
+        API[Postgres Stored Procedures] -->|Lock Row| Wallets[(Wallets Table)]
         API -->|Calculate Outcome| Logic[PL/pgSQL Logic]
         Logic -->|Commit Tx| Ledger[(Game History)]
         Logic -->|Update Balance| Wallets
     end
     
-    Wallets -->|4. Emit Event (WAL)| Realtime[Supabase Realtime]
-    Realtime -->|5. Push Balance Update| User
+    NOW -->|3. IPN Webhook| Edge[Supabase Edge Function]
+    Edge -->|4. Credit Account| API
+    User -->|5. Game Action (RPC)| API
+    Wallets -->|6. Emit Event (WAL)| Realtime[Supabase Realtime]
+    Realtime -->|7. Push Balance Update| User
 ```
 
 ---
 
-## 🔰 The "Iron Laws" (Development Rules)
+## 🔰 The "Iron Laws" (Production Rules)
 
 1.  **RPC-Only Mutation**: The frontend is forbidden from calling `UPDATE` or `INSERT` on balance tables. All writes must go through Stored Procedures (Remote Procedure Calls).
 2.  **Atomic Transactions**: Every game spin uses `SELECT ... FOR UPDATE` to lock the user's wallet row, preventing race conditions (e.g., double-spending via multi-tabbing).
 3.  **Inventory Concurrency**: Limited items (Scratch Cards) use `FOR UPDATE SKIP LOCKED` to ensure two users never buy the same ticket, even under high load.
-4.  **Defense-in-Depth**: All database tables have RLS policies enabled. `service_role` keys are never exposed.
+4.  **Defense-in-Depth**: All database tables have RLS policies enabled. `service_role` keys are never exposed to the client.
 
 ---
 
-## 🎮 Game Library
+## 💳 Payments & Economy
 
-### Slots (25+ Titles)
-Includes dynamic volatility math models (Low/Medium/High) and themes like:
-*   **Cosmic Cash** (Medium Volatility)
-*   **Pyramid Riches** (High Volatility)
-*   **Viking Victory** (Medium Volatility)
-*   **Neon Nights** (High Volatility)
-*   **Sweet Bonanza** (Cluster Pays Style)
-*   **Dead or Alive** (High Risk/Reward)
+### NOWPayments Integration
+The platform uses **NOWPayments** for crypto processing (BTC, ETH, USDT, etc.).
+1.  **Frontend**: Renders the NOWPayments Iframe Widget configured with specific `iid` (Invoice IDs) for each coin package.
+2.  **Backend**: Listens for Instant Payment Notifications (IPN) via Supabase Edge Functions to securely credit user accounts upon confirmed on-chain transactions.
 
-### Table Games
-*   **Cosmic Blackjack**: Standard 3:2 payout, Dealer stands on 17.
-*   **Jacks or Better Poker**: Full 9/6 Paytable Video Poker.
-
-### Instant Win
-*   **Plinko**: 3 Variants (Classic, X-Treme, Party). Custom physics engine with server-side path validation.
-*   **Scratch Cards**: 6 Themed cards (Lucky 7s, Zombie Zone, etc.) using Canvas API for scratch effect.
+### Currency System
+*   **Gold Coins (GC)**: Social currency for entertainment. Cannot be redeemed.
+*   **Sweeps Cash (SC)**: Sweepstakes entry tokens. 1.00 SC = $1.00 USD redeemable value.
 
 ---
 
-## 💾 Database Schema (Blueprints)
+## 💾 Database Schema
 
-The backend logic relies on this specific SQL schema structure:
+The backend logic relies on this specific SQL schema structure (see `supabase/migrations`):
 
-### 1. `profiles` (Public View)
+### 1. `profiles`
 Extends the internal `auth.users` table.
-- `id`: UUID (Primary Key)
-- `gc_balance`: BigInt (Gold Coins - Social Currency)
-- `sc_balance`: BigInt (Sweeps Cash - Redeemable Currency)
-- `vip_level`: Enum
+- `id`: UUID (Primary Key, matches Auth UID)
+- `gc_balance`: BigInt (Gold Coins)
+- `sc_balance`: BigInt (Sweeps Cash)
+- `kyc_status`: Enum (unverified, pending, verified, rejected)
 
 ### 2. `game_history` (Immutable Ledger)
 A write-only audit trail of every transaction.
-- `id`: UUID (Idempotency Key)
+- `id`: UUID
 - `user_id`: UUID
 - `game_type`: Text
 - `wager_amount`: BigInt
 - `payout_amount`: BigInt
-- `outcome_data`: JSONB (Reel positions, card hands, etc.)
-
----
-
-## ⚡ Server-Side Logic (RPCs)
-
-The "Brain" of the casino lives in `services/supabaseService.ts` mapping to these SQL functions:
-
-### `execute_atomic_transaction` (Slots / Plinko)
-*   **Inputs:** `wager`, `game_id`, `payout` (calculated server-side or verified).
-*   **Logic:** 
-    1. Locks `profiles` row.
-    2. Verifies `balance >= wager`.
-    3. Updates balance.
-    4. Inserts `game_history`.
-*   **Returns:** New Balance.
-
-### `buy_ticket_dual_currency` (Scratch Cards)
-*   **Logic:**
-    1. Pops a pre-generated ticket from `ticket_pool`.
-    2. Uses `SKIP LOCKED` to handle 1000+ concurrent buyers.
-    3. If pool is empty, transaction aborts.
-
-### `start_blackjack` / `hit` / `stand` / `deal_poker`
-*   **Logic:** The shuffling and dealing happen inside the database. The client only receives the visible cards.
+- `outcome_data`: JSONB (Reel positions, card hands, RNG seeds)
 
 ---
 
 ## 🚀 Deployment & Setup
 
-### 1. Environment Variables
-Create a `.env` file:
+### 1. Supabase Setup
+1.  Create a new Supabase project.
+2.  Run the migration script located in `supabase/migrations/schema.sql` in the SQL Editor.
+3.  Enable Auth Providers (Email/Password).
+
+### 2. Environment Variables
+Configure your Vercel project or local `.env` with:
+
 ```bash
-VITE_SUPABASE_URL=your_project_url
-VITE_SUPABASE_ANON_KEY=your_public_anon_key
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
 ```
 
-### 2. Run Client
-```bash
-npm install
-npm run dev
-```
+### 3. Vercel Deployment
+1.  Connect your GitHub repository to Vercel.
+2.  Add the environment variables from Step 2.
+3.  Deploy. The build settings are pre-configured (`npm run build`).
 
-### 3. Mock Mode (Fallback)
-If no Supabase credentials are provided, the app falls back to `lib/supabaseClient.ts` -> `null`, triggering the local simulation mode in `services/supabaseService.ts`.
+### 4. Verification
+Once deployed, the app will strictly attempt to connect to the Supabase instance.
+*   **Geo-Blocking**: Access is restricted to US/Canada (excluding banned states like WA, MI, NY).
+*   **KYC**: Redemptions require identity verification flow.
 
 ---
 
 ## 🛠️ Tech Stack
 
-*   **Frontend:** React 18, TypeScript, Vite
-*   **UI System:** Tailwind CSS, Lucide React, Glassmorphism design
-*   **State Management:** React Hooks + Supabase Realtime Subscription
-*   **Backend:** Supabase (PostgreSQL 15)
-*   **Animation:** CSS Transitions, Canvas API (Scratch Cards)
+*   **Frontend**: React 18, TypeScript, Vite
+*   **UI System**: Tailwind CSS, Lucide React, Glassmorphism
+*   **Backend**: Supabase (PostgreSQL 15 + Realtime)
+*   **Payments**: NOWPayments API
+*   **Compliance**: Built-in Geo-Blocking & KYC state management

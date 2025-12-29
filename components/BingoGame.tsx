@@ -4,6 +4,7 @@ import { GameConfig, CurrencyType, WinResult, UserProfile } from '../types';
 import { WAGER_LEVELS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { GameRulesModal } from './Modals';
+import toast from 'react-hot-toast';
 
 interface BingoGameProps {
   game: GameConfig;
@@ -11,24 +12,32 @@ interface BingoGameProps {
   balance: number;
   user: UserProfile | null;
   onClose: () => void;
-  onSpin: (wager: number, isFreeSpin: boolean) => Promise<WinResult>; // Reusing spin as generic "play"
+  onSpin: (wager: number, isFreeSpin: boolean) => Promise<WinResult>; 
   isPaused: boolean;
   onVisualBalanceChange: (balance: number | null) => void;
 }
 
 const BALL_COUNT = 75;
 const DRAW_COUNT = 30;
+const POOL_SIZE = 50;
+const MAX_SELECTED_CARDS = 4;
 
 type BingoCardState = {
     id: number;
     grid: number[][]; // 5x5, 0 for FREE
     hits: boolean[][];
+    serial: string; // Unique ID for flavor
 };
 
 export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, user, onClose, onSpin, isPaused, onVisualBalanceChange }) => {
   const [wagerIndex, setWagerIndex] = useState(3);
-  const [numCards, setNumCards] = useState(4);
-  const [cards, setCards] = useState<BingoCardState[]>([]);
+  
+  // Card State
+  const [allCards, setAllCards] = useState<BingoCardState[]>([]);
+  const [selectedCardIds, setSelectedCardIds] = useState<number[]>([]);
+  const [isPickingCards, setIsPickingCards] = useState(false);
+
+  // Game State
   const [drawnBalls, setDrawnBalls] = useState<number[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [gamePhase, setGamePhase] = useState<'idle' | 'drawing' | 'result'>('idle');
@@ -39,23 +48,22 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
   const [showRules, setShowRules] = useState(false);
 
   const currentWagerPerCard = WAGER_LEVELS[currency][wagerIndex];
-  const totalBet = currentWagerPerCard * numCards;
-
-  // Sound effects refs could go here
+  const activeCards = useMemo(() => allCards.filter(c => selectedCardIds.includes(c.id)), [allCards, selectedCardIds]);
+  const totalBet = currentWagerPerCard * activeCards.length;
 
   useEffect(() => {
      onVisualBalanceChange(visualBalance);
      return () => onVisualBalanceChange(null);
   }, [visualBalance, onVisualBalanceChange]);
 
-  // Initialize Cards
+  // Initialize Pool of 50 Cards
   useEffect(() => {
-      generateCards();
-  }, [numCards]);
+      generateCardPool();
+  }, []);
 
-  const generateCards = () => {
-      const newCards: BingoCardState[] = [];
-      for (let c = 0; c < numCards; c++) {
+  const generateCardPool = () => {
+      const newPool: BingoCardState[] = [];
+      for (let i = 0; i < POOL_SIZE; i++) {
           const grid: number[][] = Array(5).fill(0).map(() => Array(5).fill(0));
           const hits: boolean[][] = Array(5).fill(false).map(() => Array(5).fill(false));
           
@@ -73,15 +81,34 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
           }
           grid[2][2] = 0; // FREE SPACE
           hits[2][2] = true;
-          newCards.push({ id: c, grid, hits });
+          
+          const serial = `BIGO-${Math.floor(1000 + Math.random() * 9000)}-${i + 1}`;
+          newPool.push({ id: i, grid, hits, serial });
       }
-      setCards(newCards);
+      setAllCards(newPool);
+      // Default select first 4
+      setSelectedCardIds([0, 1, 2, 3]);
+  };
+
+  const toggleCardSelection = (id: number) => {
+      if (selectedCardIds.includes(id)) {
+          // Prevent deselecting the last card
+          if (selectedCardIds.length === 1) {
+              toast.error("You must play at least one card!");
+              return;
+          }
+          setSelectedCardIds(prev => prev.filter(cid => cid !== id));
+      } else {
+          if (selectedCardIds.length >= MAX_SELECTED_CARDS) {
+              toast.error(`Max ${MAX_SELECTED_CARDS} cards allowed at once.`);
+              return;
+          }
+          setSelectedCardIds(prev => [...prev, id]);
+      }
   };
 
   const checkWin = (card: BingoCardState) => {
-      // Simple patterns: Lines (Horz, Vert, Diag)
       let lines = 0;
-      
       // Horizontal
       for(let r=0; r<5; r++) {
           if(card.hits[r].every(h => h)) lines++;
@@ -101,12 +128,12 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
       if (lines === 1) return currentWagerPerCard * 0.5; // Consolation
       if (lines === 2) return currentWagerPerCard * 2;
       if (lines === 3) return currentWagerPerCard * 10;
-      if (lines >= 4) return currentWagerPerCard * 100; // Bingo/Coverall-ish
+      if (lines >= 4) return currentWagerPerCard * 100;
       return 0;
   };
 
   const playRound = async () => {
-      if (visualBalance < totalBet) { alert("Insufficient funds"); return; }
+      if (visualBalance < totalBet) { toast.error("Insufficient funds"); return; }
       
       setIsPlaying(true);
       setGamePhase('drawing');
@@ -114,11 +141,17 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
       setWinAmount(0);
       setVisualBalance(prev => prev - totalBet);
       
-      // Reset hits (except free space)
-      setCards(prev => prev.map(c => ({
-          ...c,
-          hits: c.grid.map((row, r) => row.map((cell, col) => (r===2 && col===2)))
-      })));
+      // Reset hits on ACTIVE cards only (except free space)
+      const resetPool = allCards.map(c => {
+          if (selectedCardIds.includes(c.id)) {
+              return {
+                  ...c,
+                  hits: c.grid.map((row, r) => row.map((cell, col) => (r===2 && col===2)))
+              };
+          }
+          return c;
+      });
+      setAllCards(resetPool);
 
       // Simulate Server Draw
       const pool = Array.from({length: 75}, (_, i) => i + 1);
@@ -131,14 +164,16 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
 
       // Animation Loop
       for (let i = 0; i < drawSequence.length; i++) {
-          if (isPaused) break; // Basic pause check
+          if (isPaused) break;
           const ball = drawSequence[i];
           setCurrentBall(ball);
           setDrawnBalls(prev => [...prev, ball]);
           
           // Mark Cards
-          setCards(currentCards => {
-              return currentCards.map(card => {
+          setAllCards(currentPool => {
+              return currentPool.map(card => {
+                  if (!selectedCardIds.includes(card.id)) return card; // Skip inactive
+
                   const newHits = card.hits.map(row => [...row]);
                   let hitFound = false;
                   card.grid.forEach((row, r) => {
@@ -153,23 +188,32 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
               });
           });
 
-          await new Promise(r => setTimeout(r, 150)); // Speed of draw
+          await new Promise(r => setTimeout(r, 150));
       }
 
       // Calculate Result
       let totalRoundWin = 0;
-      setCards(finalCards => {
-          finalCards.forEach(c => {
-              totalRoundWin += checkWin(c);
-          });
-          return finalCards;
+      // We need to calculate based on the latest state, but setState is async. 
+      // In a real app, we'd check the final state. Here we re-run logic or trust the last state update.
+      // Better: Re-calculate strictly from drawSequence for accuracy.
+      
+      // ... For this demo, let's grab the active cards from the pool manually after delay
+      await new Promise(r => setTimeout(r, 100)); // Wait for last render
+      
+      // Re-evaluate hits locally to ensure sync
+      const finalHitsCalculated = activeCards.map(card => {
+          // Re-simulate hits
+          const hits = card.grid.map((row, r) => row.map((cell, c) => (r===2 && c===2) || drawSequence.includes(cell)));
+          return { ...card, hits };
+      });
+
+      finalHitsCalculated.forEach(c => {
+          totalRoundWin += checkWin(c);
       });
 
       setWinAmount(totalRoundWin);
       if (totalRoundWin > 0) {
           setVisualBalance(prev => prev + totalRoundWin);
-          // Sync with server (Optimistic update done, now calling generic spin to log)
-          // We treat the "Total Win" as a slot result for backend compatibility
           onSpin(totalBet, false).catch(e => console.error("Sync error", e)); 
       }
       
@@ -207,9 +251,69 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
                 </div>
             </div>
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden relative">
+                
+                {/* --- CARD PICKER OVERLAY --- */}
+                {isPickingCards && (
+                    <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col animate-in slide-in-from-bottom-10 duration-300">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+                            <div>
+                                <h3 className="text-2xl font-black text-white font-display">SELECT CARDS</h3>
+                                <p className="text-slate-400 text-sm">Pick up to <span className="text-indigo-400 font-bold">{MAX_SELECTED_CARDS}</span> lucky cards from the pool of 50.</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <div className="text-xs uppercase font-bold text-slate-500">Selected</div>
+                                    <div className={`text-2xl font-black ${selectedCardIds.length === MAX_SELECTED_CARDS ? 'text-green-400' : 'text-white'}`}>
+                                        {selectedCardIds.length} <span className="text-slate-600 text-lg">/ {MAX_SELECTED_CARDS}</span>
+                                    </div>
+                                </div>
+                                <button onClick={() => setIsPickingCards(false)} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-colors">
+                                    CONFIRM
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                {allCards.map(card => {
+                                    const isSelected = selectedCardIds.includes(card.id);
+                                    return (
+                                        <button 
+                                            key={card.id} 
+                                            onClick={() => toggleCardSelection(card.id)}
+                                            className={`
+                                                relative aspect-[4/5] rounded-xl border-2 flex flex-col overflow-hidden transition-all duration-200 group
+                                                ${isSelected ? 'border-green-500 ring-2 ring-green-500/50 scale-[1.02] shadow-xl z-10' : 'border-slate-700 hover:border-indigo-500 opacity-70 hover:opacity-100'}
+                                            `}
+                                        >
+                                            <div className={`p-2 text-center text-xs font-bold uppercase tracking-widest ${isSelected ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                                                #{card.id + 1}
+                                            </div>
+                                            <div className="flex-1 bg-white p-1 grid grid-cols-5 gap-[1px] content-center bg-slate-200">
+                                                {card.grid.flat().map((n, i) => (
+                                                    <div key={i} className={`flex items-center justify-center text-[8px] font-bold h-full ${n===0 ? 'bg-indigo-200' : 'bg-white'}`}>
+                                                        {n===0 ? '★' : n}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {isSelected && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-green-500/20 pointer-events-none">
+                                                    <div className="bg-green-500 rounded-full p-1 shadow-lg">
+                                                        <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* LEFT: BALL HOPPER */}
-                <div className="w-64 bg-slate-950 border-r border-slate-800 p-4 flex flex-col gap-4 relative overflow-hidden">
+                <div className="w-64 bg-slate-950 border-r border-slate-800 p-4 flex flex-col gap-4 relative overflow-hidden hidden md:flex">
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
                     
                     {/* Current Ball Display */}
@@ -238,12 +342,16 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
                 <div className="flex-1 p-4 sm:p-8 bg-[#0f172a] relative overflow-y-auto">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-900 to-black pointer-events-none"></div>
                     
-                    <div className={`grid gap-4 sm:gap-8 h-full place-content-center transition-all duration-500 ${numCards === 1 ? 'grid-cols-1 max-w-md mx-auto' : numCards === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
-                        {cards.map(card => (
+                    <div className={`grid gap-4 sm:gap-8 h-full place-content-center transition-all duration-500 ${activeCards.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : activeCards.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
+                        {activeCards.map(card => (
                             <div key={card.id} className="bg-slate-100 rounded-xl overflow-hidden shadow-2xl border-4 border-white/10 transform transition-transform duration-300 hover:scale-[1.01]">
                                 {/* Card Header */}
-                                <div className="bg-indigo-600 text-white grid grid-cols-5 text-center font-black py-2 font-display tracking-widest shadow-md z-10 relative">
-                                    <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+                                <div className="bg-indigo-600 text-white flex justify-between items-center px-4 py-2 shadow-md z-10 relative">
+                                    <span className="text-[10px] font-bold opacity-70">ID: {card.id + 1}</span>
+                                    <div className="grid grid-cols-5 gap-4 font-black font-display tracking-widest">
+                                        <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+                                    </div>
+                                    <span className="text-[10px] font-bold opacity-70">{card.serial.split('-')[1]}</span>
                                 </div>
                                 {/* Grid */}
                                 <div className="grid grid-cols-5 gap-[1px] bg-slate-300 p-[1px]">
@@ -291,12 +399,15 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
             <div className="h-24 bg-slate-950 border-t border-slate-800 flex items-center justify-between px-8 z-30">
                 <div className="flex items-center gap-6">
                     <div>
-                        <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Cards</div>
-                        <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-700">
-                            {[1, 2, 4].map(n => (
-                                <button key={n} disabled={isPlaying} onClick={() => setNumCards(n)} className={`w-10 h-8 rounded font-bold transition-all ${numCards === n ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>{n}</button>
-                            ))}
-                        </div>
+                        <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Active Cards</div>
+                        <button 
+                            disabled={isPlaying}
+                            onClick={() => setIsPickingCards(true)}
+                            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-700 transition-colors font-bold disabled:opacity-50"
+                        >
+                            <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                            PICK CARDS ({activeCards.length})
+                        </button>
                     </div>
                     <div>
                         <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Bet Per Card</div>
@@ -318,7 +429,7 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
                     ) : (
                         <button 
                             onClick={playRound} 
-                            disabled={isPlaying} 
+                            disabled={isPlaying || activeCards.length === 0} 
                             className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-black text-2xl py-3 px-16 rounded-full shadow-[0_0_20px_rgba(34,197,94,0.4)] transform hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
                         >
                             PLAY
