@@ -238,6 +238,27 @@ const calculateHandScore = (hand: Card[]): number => {
 
 const MOCK_GAMES_STORE: Record<string, BlackjackState> = {};
 
+// Helper to map RPC result to BlackjackState
+const mapDBGameToState = (data: any): BlackjackState => {
+    return {
+        id: data.id,
+        deck: data.deck || [],
+        player_hand: data.player_hand || [],
+        dealer_hand: data.dealer_hand || [],
+        player_score: data.player_score,
+        dealer_score: data.dealer_score,
+        status: data.stage === 'settled' ? 
+            (data.player_score > 21 ? 'player_bust' : 
+            data.dealer_score > 21 ? 'dealer_bust' : 
+            data.player_score > data.dealer_score ? 'player_win' : 
+            data.player_score < data.dealer_score ? 'dealer_win' : 'push') 
+            : data.stage,
+        wager: data.wager_amount,
+        currency: data.currency as CurrencyType,
+        payout: 0 // In real app, you might want to fetch this from history or calculate it
+    };
+};
+
 // --- SERVICE EXPORTS ---
 
 export const supabaseService = {
@@ -294,11 +315,22 @@ export const supabaseService = {
     resetPassword: async (email: string) => { if (supabase) { const { error } = await supabase.auth.resetPasswordForEmail(email); if (error) return { success: false, message: error.message }; } return { success: true, message: "Reset link sent." }; },
     signOut: async () => { if (supabase) await supabase.auth.signOut(); localStorage.removeItem(STORAGE_KEY); },
     getSession: async () => { if (supabase) { try { const { data: { session } } = await supabase.auth.getSession(); if (session) { const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single(); return data as UserProfile; } } catch (e) { return null; } } const stored = localStorage.getItem(STORAGE_KEY); return stored ? JSON.parse(stored) : null; },
-    subscribeToUserChanges: (userId: string, callback: (payload: UserProfile) => void) => { if (!supabase) return () => {}; const channel = supabase.channel(`public:profiles:id=eq.${userId}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => { if (payload.new) callback(payload.new as UserProfile); }).subscribe(); return () => { supabase.removeChannel(channel); }; }
+    subscribeToUserChanges: (userId: string, callback: (payload: UserProfile) => void) => { 
+        if (!supabase) return () => {}; 
+        
+        // Subscribe to PROFILE changes (for simple setups) OR WALLET changes if architecture splits them
+        const channel = supabase.channel(`public:profiles:id=eq.${userId}`)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => { 
+            if (payload.new) callback(payload.new as UserProfile); 
+        })
+        .subscribe(); 
+        
+        return () => { supabase.removeChannel(channel); }; 
+    }
   },
 
   game: {
-    // Legacy Slot/Plinko Spin
+    // Universal Atomic Transaction for Slots/Plinko
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean = false, plinkoConfig?: { rows: number, risk: 'Low' | 'Medium' | 'High' }): Promise<{ user: UserProfile, result: WinResult }> => {
         let math: { result: WinResult };
         if (gameId === 'plinko') {
@@ -310,22 +342,23 @@ export const supabaseService = {
         }
         
         const winAmount = math.result.totalWin;
-        const idempotencyKey = generateIdempotencyKey();
-        const tenantId = user.tenantId || DEMO_TENANT_ID;
 
         if (supabase && !user.isGuest) {
              try {
-                 const { error } = await supabase.rpc('execute_atomic_transaction', {
-                     p_user_id: user.id,
-                     p_tenant_id: tenantId,
-                     p_activity_id: gameId,
-                     p_debit: isFreeSpin ? 0 : wager,
-                     p_credit: winAmount,
-                     p_currency: currency,
-                     p_idempotency_key: idempotencyKey
+                 // CALLING THE ATOMIC RPC DEFINED IN SQL
+                 const { data, error } = await supabase.rpc('execute_atomic_transaction', {
+                     game_type: gameId === 'plinko' ? 'plinko' : 'slot',
+                     currency: currency,
+                     wager_amount: isFreeSpin ? 0 : wager,
+                     payout_amount: winAmount,
+                     outcome_data: math.result
                  });
 
                  if (error) throw error;
+
+                 // RPC returns new balance, but we usually fetch full profile/wallet via subscription or select
+                 // For immediate UI feedback, we can optimistically use the returned new_balance if aligned
+                 // But sticking to fetching fresh profile ensures sync.
                  const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
                  return { user: updatedProfile as UserProfile, result: math.result };
              } catch (e) { throw new Error("Transaction failed."); }
@@ -345,6 +378,7 @@ export const supabaseService = {
             if (currency === CurrencyType.SC) updatedUser.redeemableSc += winAmount;
         }
         
+        const idempotencyKey = generateIdempotencyKey();
         const historyEntry: GameHistoryEntry = {
             id: idempotencyKey,
             activityId: gameId,
@@ -366,13 +400,12 @@ export const supabaseService = {
         return { user: updatedUser, result: math.result };
     },
 
-    // --- NEW: SCRATCH CARD LOGIC ---
+    // --- SCRATCH CARD LOGIC ---
     buyScratchTicket: async (user: UserProfile, currency: CurrencyType): Promise<{ user: UserProfile, result: WinResult }> => {
-        // 1. Cost Configuration
         const cost = currency === CurrencyType.GC ? 500 : 1.00;
         
         if (supabase && !user.isGuest) {
-             // REAL BACKEND CALL (Matches your Phase 1 SQL Architecture)
+             // REAL BACKEND CALL (Matches Phase 1 SQL Architecture)
              try {
                  const { data, error } = await supabase.rpc('buy_ticket_dual_currency', { 
                      mode: currency 
@@ -414,8 +447,6 @@ export const supabaseService = {
         updatedUser[balanceField] -= cost;
 
         // Generate Ticket Data
-        // Probabilities: Jackpot (0.1%), High (1%), Mid (5%), Low (15%), Loser (78.9%)
-        // SC is strictly tighter than GC in real life, but we'll use one mock dist for demo smoothness
         const rand = Math.random();
         let tier: 'jackpot' | 'high' | 'mid' | 'low' | 'loser' = 'loser';
         let prize = 0;
@@ -435,24 +466,17 @@ export const supabaseService = {
             prize = currency === CurrencyType.SC ? scPrizes[tier] : gcPrizes[tier];
         }
 
-        // Generate Grid Visuals
         const winSymbol = tier === 'jackpot' ? '💰' : tier === 'high' ? '💎' : tier === 'mid' ? '🍀' : '🎩';
         const loseSymbols = ['🍒', '🍋', '🐴', '🎩', '💎', '💰', '🍀'];
         
         if (tier !== 'loser') {
-             // Create a winning grid (3 matching symbols)
              grid = [winSymbol, winSymbol, winSymbol];
-             // Fill rest with random losers
              for(let i=0; i<6; i++) grid.push(loseSymbols[Math.floor(Math.random() * loseSymbols.length)]);
-             // Shuffle
              for (let i = grid.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [grid[i], grid[j]] = [grid[j], grid[i]];
             }
         } else {
-             // Create losing grid (ensure no 3 match)
-             // Simple approach: pick random, if 3 exist, change one.
-             // Mock simplification: Just fill random
              grid = Array(9).fill(null).map(() => loseSymbols[Math.floor(Math.random() * loseSymbols.length)]);
         }
 
@@ -486,10 +510,16 @@ export const supabaseService = {
         if (supabase) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session) {
-                const { data } = await supabase.from('transaction_events').select('id, activity_id, debit_amount, credit_amount, currency, result, created_at').order('created_at', { ascending: false }).limit(50);
+                const { data } = await supabase.from('game_history').select('*').order('created_at', { ascending: false }).limit(50);
                 if (data) {
                     return data.map((row: any) => ({
-                        id: row.id, activityId: row.activity_id, timestamp: new Date(row.created_at).getTime(), debit: row.debit_amount, credit: row.credit_amount, currency: row.currency, result: row.result === 'WIN' ? 'WIN' : 'LOSS'
+                        id: row.id, 
+                        activityId: row.game_type, 
+                        timestamp: new Date(row.created_at).getTime(), 
+                        debit: row.wager_amount, 
+                        credit: row.payout_amount, 
+                        currency: row.currency, 
+                        result: row.payout_amount > 0 ? 'WIN' : 'LOSS'
                     }));
                 }
             }
@@ -501,9 +531,9 @@ export const supabaseService = {
 
     subscribeToHistory: (callback: (entry: GameHistoryEntry) => void) => {
         if (!supabase) return () => {};
-        const channel = supabase.channel('public:transaction_events').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transaction_events' }, (payload) => {
+        const channel = supabase.channel('public:game_history').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_history' }, (payload) => {
              const row = payload.new;
-             callback({ id: row.id, activityId: row.activity_id, timestamp: new Date(row.created_at).getTime(), debit: row.debit_amount, credit: row.credit_amount, currency: row.currency, result: row.result === 'WIN' ? 'WIN' : 'LOSS' });
+             callback({ id: row.id, activityId: row.game_type, timestamp: new Date(row.created_at).getTime(), debit: row.wager_amount, credit: row.payout_amount, currency: row.currency, result: row.payout_amount > 0 ? 'WIN' : 'LOSS' });
         }).subscribe();
         return () => { supabase.removeChannel(channel); };
     },
@@ -515,13 +545,19 @@ export const supabaseService = {
   blackjack: {
     start: async (user: UserProfile, wager: number, currency: CurrencyType): Promise<{ game: BlackjackState, user: UserProfile }> => {
         if (supabase && !user.isGuest) {
-            // Online: Call RPC
-             const { data, error } = await supabase.rpc('start_game', { p_wager: wager, p_currency: currency });
+            // Online: Call Specific RPC
+             const { data, error } = await supabase.rpc('start_blackjack', { 
+                 bet_amount: wager, 
+                 currency_mode: currency 
+             });
+             
              if (error) throw error;
              
              // Refresh user balance (deducted by RPC)
              const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-             return { game: data[0] as BlackjackState, user: updatedProfile as UserProfile };
+             
+             // The RPC returns SETOF games (an array of rows), we take the first one
+             return { game: mapDBGameToState(data[0]), user: updatedProfile as UserProfile };
         } 
         
         // Mock: Local Simulation
@@ -530,7 +566,7 @@ export const supabaseService = {
         let updatedUser = { ...user };
         const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
         if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
-        updatedUser[balanceField] -= wager; // Deduct Wager
+        updatedUser[balanceField] -= wager; 
 
         const deck = generateDeck();
         const p_hand = [deck.shift()!, deck.shift()!];
@@ -550,16 +586,14 @@ export const supabaseService = {
             payout: 0
         };
 
-        // Instant Blackjack Check
         if (gameState.player_score === 21) {
              if (gameState.dealer_score === 21) {
                  gameState.status = 'push';
-                 gameState.payout = wager; // Return bet
+                 gameState.payout = wager; 
              } else {
                  gameState.status = 'player_win';
-                 gameState.payout = wager * 2.5; // 3:2 payout (1.5 + 1)
+                 gameState.payout = wager * 2.5; 
              }
-             // Credit win immediately in mock
              updatedUser[balanceField] += gameState.payout;
              if(currency === CurrencyType.SC) updatedUser.redeemableSc += gameState.payout;
         }
@@ -573,11 +607,10 @@ export const supabaseService = {
 
     hit: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
         if (supabase && !user.isGuest) {
-            const { data, error } = await supabase.rpc('hit', { game_id: gameId });
+            const { data, error } = await supabase.rpc('hit_blackjack', { game_id: gameId });
             if (error) throw error;
-            // Balance only changes if bust? Actually usually only on stand/end. 
-            // In typical DB design, bust updates balance (0 payout) or just game status.
-            return { game: data[0], user };
+            const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+            return { game: mapDBGameToState(data[0]), user: updatedProfile };
         }
 
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -590,7 +623,6 @@ export const supabaseService = {
 
         if (game.player_score > 21) {
             game.status = 'player_bust';
-            // No Payout
         }
 
         return { game: { ...game }, user };
@@ -598,19 +630,17 @@ export const supabaseService = {
 
     stand: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
         if (supabase && !user.isGuest) {
-            const { data, error } = await supabase.rpc('stand', { game_id: gameId });
+            const { data, error } = await supabase.rpc('stand_blackjack', { game_id: gameId });
             if (error) throw error;
-            // Game ended, balance might have increased
             const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-            return { game: data[0], user: updatedProfile };
+            return { game: mapDBGameToState(data[0]), user: updatedProfile };
         }
 
-        await new Promise(resolve => setTimeout(resolve, 500)); // Dealer thinking time
+        await new Promise(resolve => setTimeout(resolve, 500)); 
         const game = MOCK_GAMES_STORE[gameId];
         let updatedUser = { ...user };
         const balanceField = game.currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
 
-        // Dealer Logic
         while (game.dealer_score < 17) {
              const card = game.deck.shift()!;
              game.dealer_hand.push(card);
