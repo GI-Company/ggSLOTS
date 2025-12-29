@@ -116,6 +116,13 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
         <div className="relative w-full max-w-6xl h-[90vh] bg-slate-900 rounded-3xl border-4 border-emerald-500/50 shadow-2xl flex flex-col overflow-hidden">
             
+            {/* DEMO / GUEST BANNER */}
+            {(user.isGuest || currency === 'GC') && (
+                <div className="absolute top-0 left-0 right-0 bg-yellow-500/90 text-black text-[10px] sm:text-xs font-bold text-center py-1 uppercase tracking-widest z-30">
+                    {user.isGuest ? "GUEST MODE - PROGRESS NOT SAVED" : "FUN PLAY MODE - NO REAL PRIZES"}
+                </div>
+            )}
+
             {/* Top Bar */}
             <div className="flex-none h-16 bg-slate-950 border-b border-emerald-900 flex justify-between items-center px-6 z-20">
                 <div className="flex items-center gap-2">

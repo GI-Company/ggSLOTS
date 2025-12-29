@@ -4,7 +4,9 @@ export enum CurrencyType {
   SC = 'SC'
 }
 
-export type ViewType = 'main' | 'promotions' | 'vip' | 'get-coins' | 'redeem' | 'game' | 'history';
+export type ViewType = 'main' | 'promotions' | 'vip' | 'get-coins' | 'redeem' | 'game' | 'history' | 'sweeps-rules';
+
+export type KycStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 
 export interface UserProfile {
   id: string;
@@ -14,10 +16,16 @@ export interface UserProfile {
   lastName?: string;
   dob?: string; // YYYY-MM-DD
   
-  // Location
+  // Location (Locked after registration)
+  addressLine1?: string;
   city?: string;
   state?: string;
   zip?: string;
+  country?: string;
+
+  // Security & Compliance
+  kycStatus: KycStatus;
+  isAddressLocked: boolean; // True after initial set
 
   // Balances & Status
   gcBalance: number;
@@ -41,9 +49,11 @@ export interface GameConfig {
   maxWager: string;
   maxMultiplier: string;
   isDemo?: boolean; // Controls if game is playable without login
+  rules?: string; // Description for rules modal
 }
 
 export interface CoinPackage {
+  id: string;
   price: number;
   gcAmount: number;
   scAmount: number;

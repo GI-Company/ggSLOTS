@@ -128,7 +128,7 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
       const percent = (transparent / totalPixels) * 100;
       setRevealedPercent(percent);
 
-      if (percent > 40 && !isFullyRevealed) {
+      if (percent > 80 && !isFullyRevealed) {
           revealAll();
       }
   };
@@ -207,6 +207,13 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
          <div className="relative w-full max-w-4xl h-[90vh] bg-slate-900 rounded-3xl border-4 border-indigo-500/50 shadow-2xl flex flex-col items-center overflow-hidden">
             
+             {/* DEMO / GUEST BANNER */}
+             {(user.isGuest || currencyMode === 'GC') && (
+                <div className="absolute top-0 left-0 right-0 bg-yellow-500/90 text-black text-[10px] sm:text-xs font-bold text-center py-1 uppercase tracking-widest z-30">
+                    {user.isGuest ? "GUEST MODE - PROGRESS NOT SAVED" : "FUN PLAY MODE - NO REAL PRIZES"}
+                </div>
+             )}
+
              {/* Header */}
              <div className="w-full h-16 sm:h-20 bg-slate-950 border-b border-indigo-900 flex justify-between items-center px-4 sm:px-6 z-20 shrink-0">
                 <div className="flex items-center gap-2">

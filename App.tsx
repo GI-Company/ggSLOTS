@@ -8,7 +8,7 @@ import { SlotGame } from './components/SlotGame';
 import { PlinkoGame } from './components/PlinkoGame';
 import { BlackjackGame } from './components/BlackjackGame';
 import { ScratchGame } from './components/ScratchGame';
-import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal } from './components/Modals';
+import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('main');
   const [activeGame, setActiveGame] = useState<GameConfig | null>(null);
   const [authModalType, setAuthModalType] = useState<'login' | 'register' | null>(null);
+  const [showKyc, setShowKyc] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   
   // App-level control of sidebar state to handle game pausing/collapsing
@@ -73,13 +74,26 @@ const App: React.FC = () => {
     setCurrentView('main');
   };
 
-  const handlePurchase = async (pkg: any) => { alert("Store is currently under maintenance. Coming Soon!"); };
+  const handlePurchase = async (pkg: any) => { 
+      if(!user) return;
+      // Simulate successful payment
+      const updatedUser = await supabaseService.db.purchasePackage(pkg.price, pkg.gcAmount, pkg.scAmount);
+      setUser(updatedUser);
+      setNotification(`Purchased ${pkg.gcAmount} GC + ${pkg.scAmount} SC!`);
+  };
 
   const handleRedeem = async (amount: number) => {
     if (!user || user.isGuest) return;
     const updatedUser = await supabaseService.db.redeem(amount);
     setUser(updatedUser);
-    alert(`Redemption of ${amount} SC request received!`);
+    alert(`Redemption of ${amount} SC request received! Funds will arrive in 1-3 business days.`);
+  };
+
+  const handleKycUpdate = async (status: 'pending') => {
+      if (!user) return;
+      await supabaseService.auth.submitKyc(user.id);
+      setUser(prev => prev ? { ...prev, kycStatus: status } : null);
+      setNotification("KYC Documents Submitted. Verification in progress.");
   };
 
   const handleGameSpin = async (wager: number, isFreeSpin: boolean = false, plinkoConfig?: any): Promise<WinResult> => {
@@ -96,19 +110,39 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    if (currentView === 'sweeps-rules') return <SweepstakesRulesModal onClose={() => setCurrentView('main')} />;
     if (currentView === 'history') return <HistoryModal onClose={() => setCurrentView('main')} />;
     if (currentView === 'get-coins') return <GetCoinsModal onClose={() => setCurrentView('main')} onPurchase={handlePurchase} />;
+    
     if (currentView === 'redeem') {
         if (!user || user.isGuest) return <div className="p-8 text-center text-white">Please login to redeem.</div>;
-        return <RedeemModal onClose={() => setCurrentView('main')} user={user} onRedeem={handleRedeem} />;
+        return (
+            <RedeemModal 
+                onClose={() => setCurrentView('main')} 
+                user={user} 
+                onRedeem={handleRedeem} 
+                onOpenKyc={() => setShowKyc(true)}
+            />
+        );
     }
+
     if (currentView === 'promotions') {
         return (
-            <div className="p-8 text-center">
+            <div className="p-8 text-center animate-in fade-in duration-300">
                 <h2 className="text-3xl font-bold text-white mb-4">Promotions</h2>
-                <div className="bg-slate-800 p-6 rounded-xl border border-indigo-500/30 max-w-2xl mx-auto">
-                    <h3 className="text-xl text-yellow-400 font-bold mb-2">Daily Login Bonus</h3>
-                    <p className="text-slate-300">Get <span className="text-white font-bold">10,000 GC</span> every day you login.</p>
+                <div className="max-w-2xl mx-auto space-y-4">
+                    <div className="bg-slate-800 p-6 rounded-xl border border-indigo-500/30">
+                        <h3 className="text-xl text-yellow-400 font-bold mb-2">Daily Login Bonus</h3>
+                        <p className="text-slate-300">Get <span className="text-white font-bold">10,000 GC</span> every day you login.</p>
+                    </div>
+                    <div className="bg-slate-800 p-6 rounded-xl border border-green-500/30">
+                        <h3 className="text-xl text-green-400 font-bold mb-2">Sign Up Bonus</h3>
+                        <p className="text-slate-300">New players receive <span className="text-white font-bold">20.00 SC</span> instantly upon registration.</p>
+                    </div>
+                     <div className="bg-slate-800 p-6 rounded-xl border border-indigo-500/30">
+                        <h3 className="text-xl text-white font-bold mb-2">Mail-In Entry (AMO)</h3>
+                        <p className="text-slate-300 text-sm">Send a handwritten 3x5 card to receive 5.00 SC. See <button onClick={() => setCurrentView('sweeps-rules')} className="text-indigo-400 underline">Official Rules</button> for details.</p>
+                    </div>
                 </div>
             </div>
         );
@@ -164,7 +198,7 @@ const App: React.FC = () => {
             <div className="fixed top-24 right-4 z-[80] bg-indigo-600 text-white px-6 py-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300 border border-indigo-400/50 flex items-center gap-3">
                 <span className="text-2xl">🎁</span>
                 <div>
-                    <h4 className="font-bold">Bonus Received!</h4>
+                    <h4 className="font-bold">Notification</h4>
                     <p className="text-sm text-indigo-100">{notification}</p>
                 </div>
             </div>
@@ -174,11 +208,16 @@ const App: React.FC = () => {
             <AuthModal type={authModalType} onClose={() => setAuthModalType(null)} onAuth={handleAuth} />
         )}
 
+        {showKyc && user && (
+            <KycModal onClose={() => setShowKyc(false)} user={user} onStatusUpdate={handleKycUpdate} />
+        )}
+
         {activeGame && activeGame.id === 'plinko' && (
             <PlinkoGame 
                 game={activeGame}
                 currency={currency}
                 balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
+                user={user}
                 onClose={closeGame}
                 onSpin={(wager, isFreeSpin, config) => handleGameSpin(wager, isFreeSpin, config)}
                 isPaused={!sidebarCollapsed}
@@ -214,6 +253,7 @@ const App: React.FC = () => {
                 game={activeGame} 
                 currency={currency}
                 balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
+                user={user}
                 onClose={closeGame}
                 onSpin={handleGameSpin}
                 isPaused={!sidebarCollapsed}

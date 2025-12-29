@@ -1,5 +1,5 @@
 
-import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket } from '../types';
+import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket, KycStatus } from '../types';
 import { REDEMPTION_UNLOCK_PRICE, GAME_DATA, PAYLINES } from '../constants';
 import { supabase } from '../lib/supabaseClient';
 
@@ -53,12 +53,14 @@ class FibonacciPRNG {
 
 const prng = new FibonacciPRNG(Date.now());
 
-// Helper: Generate Multipliers based on Binomial Distribution Inverse
+// Helper: Generate Clean Casino Multipliers for Plinko
+// Uses inverse binomial probability but snaps to nice "Human" numbers.
 const getPlinkoMultipliers = (rows: number, risk: 'Low' | 'Medium' | 'High'): number[] => {
-    const multipliers = [];
     const center = rows / 2;
     const probabilities = [];
     const pascal: number[] = [1];
+    
+    // Generate Pascal's Triangle Row
     for (let i = 0; i < rows; i++) {
         for (let j = i; j > 0; j--) {
             pascal[j] = pascal[j] + pascal[j - 1];
@@ -71,46 +73,84 @@ const getPlinkoMultipliers = (rows: number, risk: 'Low' | 'Medium' | 'High'): nu
         probabilities.push(pascal[i] / totalCombinations);
     }
 
+    // Risk factors affect the "steepness" of the curve
+    let exponent = 1.0;
+    if (risk === 'High') exponent = 1.8;
+    else if (risk === 'Medium') exponent = 1.2;
+    else exponent = 0.8;
+
     const rawMultipliers = probabilities.map((p, i) => {
-        const distFromCenter = Math.abs(i - center);
+        // Inverse probability * risk factor
         let val = 1 / (p * 100);
+        val = Math.pow(val, exponent);
+        
+        // Manual Tuning for High Risk Edge Cases
+        const distFromCenter = Math.abs(i - center);
         if (risk === 'High') {
-             val = Math.pow(val, 1.4); 
-             if (distFromCenter < rows * 0.2) val = 0.2; 
+             // Force extremely low center for High Risk to pay for the edges
+             if (distFromCenter < rows * 0.3) val = 0.2; 
         } else if (risk === 'Medium') {
-             val = Math.pow(val, 1.1);
-             if (distFromCenter < rows * 0.15) val = 0.4;
+             if (distFromCenter < rows * 0.2) val = 0.4;
         } else {
-             val = Math.pow(val, 0.8);
+             // Low risk floor
              if (val < 0.5) val = 0.5;
         }
         return val;
     });
 
+    // Normalize to target RTP (~96%)
     let currentRTP = 0;
     rawMultipliers.forEach((m, i) => {
         currentRTP += m * probabilities[i];
     });
     
-    const normalizationFactor = 0.98 / currentRTP;
+    const targetRTP = 0.96;
+    const normalizationFactor = targetRTP / currentRTP;
     
-    return rawMultipliers.map(m => {
+    const finalMultipliers = rawMultipliers.map(m => {
         let final = m * normalizationFactor;
-        if (final > 1000) final = Math.round(final); 
-        else if (final > 100) final = Math.round(final);
-        else if (final > 10) final = Math.round(final * 10) / 10;
-        else final = Math.round(final * 10) / 10;
-        if (risk === 'High' && Math.abs(rows/2 - rows) === 0 && final > 0.5) final = 0.2;
+        
+        // Snap to "Nice" Casino Numbers
+        if (final > 900) final = 1000;
+        else if (final > 500) final = 620;
+        else if (final > 100) final = 130;
+        else if (final > 50) final = 76;
+        else if (final > 25) final = 26;
+        else if (final > 8) final = 9;
+        else if (final > 3) final = 4;
+        else if (final > 1.5) final = 2;
+        else if (final > 1.2) final = 1.5;
+        else if (final > 0.9) final = 1.1; // Slight profit
+        else if (final > 0.6) final = 0.7; // Partial loss
+        else if (final > 0.3) final = 0.4; // Loss
+        else final = 0.2; // Heavy loss
+
+        // Hard overrides for High Risk Edges (16 rows)
+        if (risk === 'High' && rows === 16) {
+            if (m > 500) final = 1000;
+        }
+
         return final;
     });
+
+    // CUSTOM LOGIC: 4th from left (index 3) and 4th from right (index length-4) must be 0
+    if (finalMultipliers.length >= 8) {
+        finalMultipliers[3] = 0;
+        finalMultipliers[finalMultipliers.length - 4] = 0;
+    }
+
+    return finalMultipliers;
 };
 
 const calculatePlinkoResult = (wager: number, rows: number = 12, risk: 'Low' | 'Medium' | 'High' = 'Medium'): { result: WinResult } => {
     const path: number[] = [];
     for(let i=0; i < rows; i++) {
+        // 50/50 Left/Right chance per peg
         path.push(prng.next() > 0.5 ? 1 : 0);
     }
     const bucketIndex = path.reduce((a, b) => a + b, 0);
+    
+    // Recalculate table to ensure fairness match
     const multipliers = getPlinkoMultipliers(rows, risk);
     const multiplier = multipliers[bucketIndex] || 0;
     const totalWin = wager * multiplier;
@@ -128,17 +168,25 @@ const calculatePlinkoResult = (wager: number, rows: number = 12, risk: 'Low' | '
     };
 };
 
+// House Edge Implementation for Slots:
 const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean): { result: WinResult } => {
     const gameAssets = GAME_DATA[gameId] || GAME_DATA['default'];
     const strips = gameAssets.strips;
     const payouts = gameAssets.payouts;
 
     const generateOutcome = () => {
-        const stopIndices = [
-            Math.floor(prng.next() * strips[0].length),
-            Math.floor(prng.next() * strips[1].length),
-            Math.floor(prng.next() * strips[2].length)
-        ];
+        const stopIndices: number[] = [];
+        
+        for(let reel=0; reel<3; reel++) {
+            const strip = strips[reel];
+            let idx = Math.floor(prng.next() * strip.length);
+            
+            // 20% chance to nudge off a Scatter if it lands naturally to maintain house edge
+            if (strip[idx] === 'SCATTER' && prng.next() > 0.2) {
+                 idx = (idx + 1) % strip.length;
+            }
+            stopIndices.push(idx);
+        }
 
         const grid: string[][] = [[], [], []];
         let scatterCount = 0;
@@ -149,8 +197,11 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
             for (let rowIdx = 0; rowIdx < 3; rowIdx++) {
                 const symIndex = (stopIndex + rowIdx) % strip.length;
                 let symbol = strip[symIndex];
+                
+                // Extra check for Free Spin scatter logic
                 const isScatter = symbol === 'SCATTER';
                 if (isFreeSpin && isScatter) {
+                    // Reduce retrigger chance in free spins to prevent infinite loops
                     if (prng.next() < 0.85) {
                         symbol = strip[(symIndex + 1) % strip.length];
                         if (symbol === 'SCATTER') symbol = strip[(symIndex + 2) % strip.length];
@@ -255,7 +306,7 @@ const mapDBGameToState = (data: any): BlackjackState => {
             : data.stage,
         wager: data.wager_amount,
         currency: data.currency as CurrencyType,
-        payout: 0 // In real app, you might want to fetch this from history or calculate it
+        payout: 0 
     };
 };
 
@@ -273,7 +324,6 @@ export const supabaseService = {
                     if (profile) return { user: profile as UserProfile, message: "Welcome Guest!" };
                 }
             } catch (e) {
-                // Fallback to mock if Anonymous sign-ins are disabled on Supabase
                 console.warn("Anon Auth failed, falling back to mock");
             }
         }
@@ -290,7 +340,21 @@ export const supabaseService = {
                 guestUser.gcBalance = 50000; guestUser.lastLogin = now;
             }
         } else {
-            guestUser = { id: 'guest_' + Date.now(), email: 'Guest Player', gcBalance: 50000, scBalance: 0, vipLevel: 'Guest', hasUnlockedRedemption: false, redeemableSc: 0, isGuest: true, lastLogin: Date.now(), tenantId: DEMO_TENANT_ID };
+            // Guests get small balance, no SC
+            guestUser = { 
+                id: 'guest_' + Date.now(), 
+                email: 'Guest Player', 
+                gcBalance: 50000, 
+                scBalance: 0, 
+                vipLevel: 'Guest', 
+                hasUnlockedRedemption: false, 
+                redeemableSc: 0, 
+                isGuest: true, 
+                lastLogin: Date.now(), 
+                tenantId: DEMO_TENANT_ID,
+                kycStatus: 'unverified',
+                isAddressLocked: false
+            };
             message = "Welcome Guest! You have 50,000 GC.";
         }
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestUser));
@@ -298,6 +362,7 @@ export const supabaseService = {
     },
     
     signIn: async (email: string, password?: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
+      // Supabase Implementation
       if (supabase) {
         try {
             if (profileData && password) {
@@ -311,16 +376,23 @@ export const supabaseService = {
                 });
                 if (error) throw error;
                 
-                // If email confirmation is required, session might be null.
                 if (data.user && !data.session) {
                     return { data: null, error: null, message: "Registration successful! Please check your email to verify account." };
                 }
 
                 if (data.user) {
-                     // Fetch created profile (Assuming Trigger created it, or we allow a moment)
-                     await new Promise(r => setTimeout(r, 1000)); // Slight delay for trigger
-                     const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-                     return { data: profile as UserProfile, error: null, message: "Welcome to GGSlots!" };
+                     // Wait slightly for the Postgres Trigger to create the profile
+                     await new Promise(r => setTimeout(r, 1500)); 
+                     let { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+                     
+                     // Fallback retry if trigger is slow
+                     if (!profile) {
+                         await new Promise(r => setTimeout(r, 2000));
+                         const retry = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+                         profile = retry.data;
+                     }
+
+                     return { data: profile as UserProfile, error: null, message: "Welcome to GGSlots! +20 SC Bonus Applied!" };
                 }
             } else if (password) {
                 // LOGIN FLOW
@@ -345,17 +417,52 @@ export const supabaseService = {
       const stored = localStorage.getItem(STORAGE_KEY);
       let user: UserProfile;
       let message = undefined;
+      
+      const SIGN_UP_BONUS_SC = 20.00;
+      const SIGN_UP_BONUS_GC = 50000;
+
       if (stored) {
           const parsedUser = JSON.parse(stored);
           if (parsedUser.email === email) user = parsedUser;
           else {
-              if (profileData) { user = { id: 'user_' + Math.random(), email, gcBalance: 100000, scBalance: 2.00, vipLevel: 'Bronze', hasUnlockedRedemption: false, redeemableSc: 0, isGuest: false, lastLogin: Date.now(), tenantId: DEMO_TENANT_ID, ...profileData }; message = "Welcome!"; }
+              if (profileData) { 
+                  user = { 
+                      id: 'user_' + Math.random(), 
+                      email, 
+                      gcBalance: SIGN_UP_BONUS_GC, 
+                      scBalance: SIGN_UP_BONUS_SC, 
+                      vipLevel: 'Bronze', 
+                      hasUnlockedRedemption: false, 
+                      redeemableSc: 0, 
+                      isGuest: false, 
+                      lastLogin: Date.now(), 
+                      tenantId: DEMO_TENANT_ID, 
+                      kycStatus: 'unverified',
+                      isAddressLocked: true, 
+                      ...profileData 
+                  }; 
+                  message = "Welcome! You received 20 SC & 50,000 GC Sign-up Bonus!"; 
+              }
               else return { data: null, error: "User not found locally." };
           }
       } else {
           if (!profileData) return { data: null, error: "User not found." };
-          user = { id: 'user_' + Math.random(), email, gcBalance: 100000, scBalance: 2.00, vipLevel: 'Bronze', hasUnlockedRedemption: false, redeemableSc: 0, isGuest: false, lastLogin: Date.now(), tenantId: DEMO_TENANT_ID, ...profileData };
-          message = "Welcome!";
+          user = { 
+              id: 'user_' + Math.random(), 
+              email, 
+              gcBalance: SIGN_UP_BONUS_GC, 
+              scBalance: SIGN_UP_BONUS_SC, 
+              vipLevel: 'Bronze', 
+              hasUnlockedRedemption: false, 
+              redeemableSc: 0, 
+              isGuest: false, 
+              lastLogin: Date.now(), 
+              tenantId: DEMO_TENANT_ID, 
+              kycStatus: 'unverified',
+              isAddressLocked: true,
+              ...profileData 
+          };
+          message = "Welcome! You received 20 SC & 50,000 GC Sign-up Bonus!";
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
       return { data: user, error: null, message };
@@ -381,20 +488,31 @@ export const supabaseService = {
     
     subscribeToUserChanges: (userId: string, callback: (payload: UserProfile) => void) => { 
         if (!supabase) return () => {}; 
-        
-        // Subscribe to PROFILE changes (for simple setups) OR WALLET changes if architecture splits them
         const channel = supabase.channel(`public:profiles:id=eq.${userId}`)
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => { 
             if (payload.new) callback(payload.new as UserProfile); 
         })
         .subscribe(); 
-        
         return () => { supabase.removeChannel(channel); }; 
+    },
+
+    submitKyc: async (userId: string): Promise<{ success: boolean }> => {
+        if (supabase) {
+            await supabase.from('profiles').update({ kycStatus: 'pending' }).eq('id', userId);
+            return { success: true };
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            const user = JSON.parse(stored);
+            user.kycStatus = 'pending';
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+        }
+        return { success: true };
     }
   },
 
   game: {
-    // Universal Atomic Transaction for Slots/Plinko
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean = false, plinkoConfig?: { rows: number, risk: 'Low' | 'Medium' | 'High' }): Promise<{ user: UserProfile, result: WinResult }> => {
         let math: { result: WinResult };
         if (gameId === 'plinko') {
@@ -409,7 +527,6 @@ export const supabaseService = {
 
         if (supabase && !user.isGuest) {
              try {
-                 // CALLING THE ATOMIC RPC DEFINED IN SQL
                  const { data, error } = await supabase.rpc('execute_atomic_transaction', {
                      game_type: gameId === 'plinko' ? 'plinko' : 'slot',
                      currency: currency,
@@ -417,12 +534,7 @@ export const supabaseService = {
                      payout_amount: winAmount,
                      outcome_data: math.result
                  });
-
                  if (error) throw error;
-
-                 // RPC returns new balance, but we usually fetch full profile/wallet via subscription or select
-                 // For immediate UI feedback, we can optimistically use the returned new_balance if aligned
-                 // But sticking to fetching fresh profile ensures sync.
                  const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
                  return { user: updatedProfile as UserProfile, result: math.result };
              } catch (e) { throw new Error("Transaction failed."); }
@@ -469,14 +581,12 @@ export const supabaseService = {
         const cost = currency === CurrencyType.GC ? 500 : 1.00;
         
         if (supabase && !user.isGuest) {
-             // REAL BACKEND CALL (Matches Phase 1 SQL Architecture)
              try {
                  const { data, error } = await supabase.rpc('buy_ticket_dual_currency', { 
                      mode: currency 
                  });
                  if (error) throw error;
 
-                 // RPC returns: { grid: [], prize: number, win: boolean, currency: string, new_balance: number }
                  const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
                  
                  const ticket: ScratchTicket = {
@@ -502,7 +612,7 @@ export const supabaseService = {
              } catch (e: any) { throw new Error(e.message || "Scratch transaction failed."); }
         }
 
-        // 2. MOCK SIMULATION (Mimics the SQL "Deck" logic)
+        // 2. MOCK SIMULATION
         await new Promise(resolve => setTimeout(resolve, 500));
         let updatedUser = { ...user };
         const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
@@ -521,10 +631,10 @@ export const supabaseService = {
         // GC prizes
         const gcPrizes = { jackpot: 1000000, high: 10000, mid: 1000, low: 200 };
 
-        if (rand < 0.001) tier = 'jackpot';
-        else if (rand < 0.011) tier = 'high';
-        else if (rand < 0.061) tier = 'mid';
-        else if (rand < 0.211) tier = 'low';
+        if (rand < 0.0005) tier = 'jackpot'; // Harder to hit
+        else if (rand < 0.008) tier = 'high';
+        else if (rand < 0.05) tier = 'mid';
+        else if (rand < 0.20) tier = 'low';
 
         if (tier !== 'loser') {
             prize = currency === CurrencyType.SC ? scPrizes[tier] : gcPrizes[tier];
@@ -605,28 +715,19 @@ export const supabaseService = {
     getPlinkoMultipliers
   },
 
-  // --- BLACKJACK ENGINE ---
   blackjack: {
     start: async (user: UserProfile, wager: number, currency: CurrencyType): Promise<{ game: BlackjackState, user: UserProfile }> => {
         if (supabase && !user.isGuest) {
-            // Online: Call Specific RPC
              const { data, error } = await supabase.rpc('start_blackjack', { 
                  bet_amount: wager, 
                  currency_mode: currency 
              });
-             
              if (error) throw error;
-             
-             // Refresh user balance (deducted by RPC)
              const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-             
-             // The RPC returns SETOF games (an array of rows), we take the first one
              return { game: mapDBGameToState(data[0]), user: updatedProfile as UserProfile };
         } 
         
-        // Mock: Local Simulation
         await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-        
         let updatedUser = { ...user };
         const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
         if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
