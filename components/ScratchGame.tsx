@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameConfig, CurrencyType, ScratchTicket, UserProfile } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import toast from 'react-hot-toast';
 
 interface ScratchGameProps {
   game: GameConfig;
@@ -202,7 +203,7 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
           onUpdateUser(updatedUser);
           setTicket(result.scratchOutcome || null);
       } catch (e: any) {
-          alert(e.message);
+          toast.error(e.message);
       }
       setLoading(false);
   };

@@ -4,6 +4,7 @@ import { GameConfig, CurrencyType, WinResult, UserProfile } from '../types';
 import { GAME_DATA, WAGER_LEVELS } from '../constants';
 import { SlotReel } from './SlotReel';
 import { GameRulesModal } from './Modals';
+import toast from 'react-hot-toast';
 
 interface SlotGameProps {
   game: GameConfig;
@@ -21,6 +22,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   const [stopping, setStopping] = useState(false);
   const [targetIndices, setTargetIndices] = useState([0, 0, 0]);
   const [isQuickSpin, setIsQuickSpin] = useState(false);
+  const [isAutoSpinning, setIsAutoSpinning] = useState(false);
   const [showRules, setShowRules] = useState(false);
   
   // Bonus Game State
@@ -35,6 +37,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   
   const winTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bonusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSpinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingWinAmount = useRef<number>(0);
 
   const currentWager = WAGER_LEVELS[currency][wagerIndex];
@@ -45,20 +48,24 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   const backgroundStyle = game.style?.background ? { backgroundImage: `url(${game.style.background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { backgroundColor: '#0f172a' };
   const accentColor = game.style?.accentColor || '#6366f1';
 
+  // Sync Balance
   useEffect(() => {
     if (!spinning && !stopping && !winState && !isBonusActive) {
         setVisualBalance(balance);
     }
   }, [balance, spinning, stopping, winState, isBonusActive]);
 
+  // Init Reels
   useEffect(() => {
     setTargetIndices(reelStrips.map(strip => Math.floor(Math.random() * strip.length)));
   }, [game.id]);
 
+  // Cleanups
   useEffect(() => {
       return () => {
           if (winTimerRef.current) clearTimeout(winTimerRef.current);
           if (bonusTimerRef.current) clearTimeout(bonusTimerRef.current);
+          if (autoSpinTimerRef.current) clearTimeout(autoSpinTimerRef.current);
       };
   }, []);
 
@@ -68,7 +75,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
           text: text || (isBig ? "BIG WIN!" : "WINNER")
       });
       pendingWinAmount.current = amount;
-      const duration = isQuickSpin || (isBonusActive && freeSpinsRemaining > 0) ? 800 : 3000;
+      const duration = isQuickSpin || isAutoSpinning || (isBonusActive && freeSpinsRemaining > 0) ? 800 : 3000;
       winTimerRef.current = setTimeout(() => { collectWin(); }, duration);
   };
 
@@ -85,14 +92,25 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   };
 
   const executeSpin = async (isFreeSpin: boolean = false) => {
-    if (!isFreeSpin && balance < currentWager) { alert("Insufficient Balance!"); return; }
-    if (winState) collectWin();
-    if (!isFreeSpin) { setVisualBalance(prev => prev - currentWager); setLastWin(0); }
+    if (!isFreeSpin && balance < currentWager) { 
+        toast.error("Insufficient Balance!"); 
+        setIsAutoSpinning(false); 
+        return; 
+    }
     
-    setSpinning(true); setStopping(false);
-    const minWait = isQuickSpin || isFreeSpin ? 50 : 300; 
-    const holdDuration = isQuickSpin || isFreeSpin ? 200 : 2000;
-    const stopTransition = isQuickSpin || isFreeSpin ? 300 : 800;
+    if (winState) collectWin();
+    
+    if (!isFreeSpin) { 
+        setVisualBalance(prev => prev - currentWager); 
+        setLastWin(0); 
+    }
+    
+    setSpinning(true); 
+    setStopping(false);
+    
+    const minWait = isQuickSpin || isFreeSpin || isAutoSpinning ? 50 : 300; 
+    const holdDuration = isQuickSpin || isFreeSpin || isAutoSpinning ? 200 : 2000;
+    const stopTransition = isQuickSpin || isFreeSpin || isAutoSpinning ? 300 : 800;
 
     try {
         const minSpinTime = new Promise(resolve => setTimeout(resolve, minWait));
@@ -104,28 +122,42 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
         setTimeout(() => {
              setStopping(true);
              setTimeout(() => {
-                 setSpinning(false); setStopping(false);
+                 setSpinning(false); 
+                 setStopping(false);
+                 
+                 // Handle Results
                  if (result.freeSpinsWon > 0) {
                      const isRetrigger = isBonusActive;
                      setFreeSpinsRemaining(prev => prev + result.freeSpinsWon);
                      const winAmount = result.totalWin;
-                     if (!isRetrigger) { setIsBonusActive(true); setBonusWinTotal(0); triggerWinCelebration(winAmount, true, "BONUS TRIGGERED!"); } 
-                     else { triggerWinCelebration(winAmount, true, "RE-TRIGGER! +10 SPINS"); }
+                     
+                     // Stop auto-spin if bonus hit
+                     if (!isRetrigger) { 
+                         setIsAutoSpinning(false);
+                         setIsBonusActive(true); 
+                         setBonusWinTotal(0); 
+                         triggerWinCelebration(winAmount, true, "BONUS TRIGGERED!"); 
+                     } else { 
+                         triggerWinCelebration(winAmount, true, "RE-TRIGGER! +10 SPINS"); 
+                     }
                      if (winAmount > 0) setLastWin(winAmount);
                  } else if (result.totalWin > 0) {
                      const winText = result.bonusText ? result.bonusText : "";
                      triggerWinCelebration(result.totalWin, result.isBigWin, winText);
                      setLastWin(result.totalWin);
                  }
+
                  if (isFreeSpin) { setFreeSpinsRemaining(prev => Math.max(0, prev - 1)); }
              }, stopTransition); 
         }, holdDuration);
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
-        setSpinning(false); setStopping(false); setVisualBalance(balance); 
+        toast.error(e.message || "Spin Failed");
+        setSpinning(false); setStopping(false); setVisualBalance(balance); setIsAutoSpinning(false);
     }
   };
 
+  // --- BONUS SPIN LOOP ---
   useEffect(() => {
       if (isBonusActive && freeSpinsRemaining > 0 && !spinning && !stopping && !winState) {
           bonusTimerRef.current = setTimeout(() => { executeSpin(true); }, 1000); 
@@ -138,9 +170,23 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
       return () => { if (bonusTimerRef.current) clearTimeout(bonusTimerRef.current); }
   }, [isBonusActive, freeSpinsRemaining, spinning, stopping, winState, bonusWinTotal]);
 
+  // --- AUTO SPIN LOOP ---
+  useEffect(() => {
+      if (isAutoSpinning && !spinning && !stopping && !winState && !isBonusActive) {
+          if (balance < currentWager) { setIsAutoSpinning(false); return; }
+          autoSpinTimerRef.current = setTimeout(() => { executeSpin(false); }, 500);
+      }
+      return () => { if (autoSpinTimerRef.current) clearTimeout(autoSpinTimerRef.current); }
+  }, [isAutoSpinning, spinning, stopping, winState, isBonusActive, balance, currentWager]);
+
   const handleClick = () => {
       if (spinning && !stopping) { setStopping(true); return; } 
       if (!spinning && !isBonusActive) { executeSpin(false); }
+  };
+
+  const toggleAuto = () => {
+      if (isAutoSpinning) setIsAutoSpinning(false);
+      else setIsAutoSpinning(true);
   };
 
   return (
@@ -184,7 +230,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
                 
                 {reelStrips.map((strip, i) => (
                     <div key={i} className={`flex-1 h-full max-w-[200px] relative bg-slate-950/80 rounded-lg overflow-hidden transition-all duration-300 z-10 ${isBonusActive ? 'border border-yellow-500/30 shadow-[inset_0_0_20px_rgba(234,179,8,0.1)]' : ''}`}>
-                        <SlotReel symbols={strip} targetIndex={targetIndices[i]} isSpinning={spinning && !stopping} reelIndex={i} quickSpin={isQuickSpin || isBonusActive}/>
+                        <SlotReel symbols={strip} targetIndex={targetIndices[i]} isSpinning={spinning && !stopping} reelIndex={i} quickSpin={isQuickSpin || isBonusActive || isAutoSpinning}/>
                     </div>
                 ))}
             </div>
@@ -192,7 +238,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
             <div className="flex-none h-24 bg-slate-900/90 backdrop-blur-md border-t flex items-center justify-between px-4 sm:px-8 gap-4 z-20" style={{ borderColor: `${accentColor}30` }}>
                 <div className="flex flex-col items-center">
                     <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Bet</div>
-                    <div className={`flex items-center bg-slate-950 rounded-lg border border-slate-700 p-1 shadow-inner ${isBonusActive ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                    <div className={`flex items-center bg-slate-950 rounded-lg border border-slate-700 p-1 shadow-inner ${isBonusActive || spinning || isAutoSpinning ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
                         <button disabled={spinning || wagerIndex === 0} onClick={() => setWagerIndex(i => i - 1)} className="w-10 h-8 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50 text-white font-bold transition-colors">-</button>
                         <div className="w-24 text-center font-bold text-white tabular-nums">{currency === 'GC' ? currentWager.toLocaleString() : currentWager.toFixed(2)}</div>
                         <button disabled={spinning || wagerIndex === WAGER_LEVELS[currency].length - 1} onClick={() => setWagerIndex(i => i + 1)} className="w-10 h-8 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50 text-white font-bold transition-colors">+</button>
@@ -202,8 +248,12 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
                 <div className="flex-1 max-w-xs h-16 flex items-center gap-3">
                     {isBonusActive ? (<div className="w-full h-full bg-slate-900 border-2 border-yellow-500 rounded-2xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.2)] relative overflow-hidden"><div className="absolute inset-0 bg-yellow-500/10 animate-pulse"></div><span className="text-yellow-500 font-bold text-xs uppercase tracking-widest relative z-10">Free Spins</span><span className="text-3xl font-black text-white relative z-10 tabular-nums">{freeSpinsRemaining}</span></div>) : (
                         <>
-                            <button onClick={() => setIsQuickSpin(p => !p)} disabled={spinning} className={`h-10 w-10 rounded-full flex items-center justify-center border transition-all duration-200 shadow-md ${isQuickSpin ? 'bg-yellow-500 border-yellow-300 text-slate-900 shadow-yellow-500/50' : 'bg-slate-700 border-slate-600 text-slate-400 hover:text-white'}`} title="Quick Spin"><svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg></button>
-                            <button onClick={handleClick} className={`flex-1 h-full rounded-2xl font-black text-2xl tracking-widest uppercase shadow-lg transition-all duration-100 transform active:scale-[0.98] flex items-center justify-center relative overflow-hidden group ${spinning && !stopping ? 'bg-red-600 text-white shadow-red-500/30 hover:bg-red-500' : spinning ? 'bg-slate-700 text-slate-500 cursor-wait' : 'bg-gradient-to-b from-green-400 to-green-600 text-white shadow-green-500/30 hover:shadow-green-500/50 hover:brightness-110'}`}>{!spinning && <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-20deg] group-hover:animate-shine" />}{spinning && !stopping ? <span>STOP</span> : spinning ? <div className="w-6 h-6 border-4 border-slate-500 border-t-white rounded-full animate-spin"></div> : 'SPIN'}</button>
+                            <div className="flex flex-col gap-1">
+                                <button onClick={() => setIsQuickSpin(p => !p)} disabled={spinning || isAutoSpinning} className={`h-8 w-12 rounded flex items-center justify-center border transition-all duration-200 shadow-md ${isQuickSpin ? 'bg-yellow-500 border-yellow-300 text-slate-900 shadow-yellow-500/50' : 'bg-slate-700 border-slate-600 text-slate-400 hover:text-white'}`} title="Quick Spin"><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg></button>
+                                <button onClick={toggleAuto} disabled={spinning && !isAutoSpinning} className={`h-8 w-12 rounded flex items-center justify-center border transition-all duration-200 shadow-md ${isAutoSpinning ? 'bg-green-500 border-green-300 text-white shadow-green-500/50 animate-pulse' : 'bg-slate-700 border-slate-600 text-slate-400 hover:text-white'}`} title="Auto Spin"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                            </div>
+                            
+                            <button onClick={handleClick} className={`flex-1 h-full rounded-2xl font-black text-2xl tracking-widest uppercase shadow-lg transition-all duration-100 transform active:scale-[0.98] flex items-center justify-center relative overflow-hidden group ${spinning && !stopping ? 'bg-red-600 text-white shadow-red-500/30 hover:bg-red-500' : spinning ? 'bg-slate-700 text-slate-500 cursor-wait' : 'bg-gradient-to-b from-green-400 to-green-600 text-white shadow-green-500/30 hover:shadow-green-500/50 hover:brightness-110'}`}>{!spinning && <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-20deg] group-hover:animate-shine" />}{spinning && !stopping ? <span>STOP</span> : spinning ? <div className="w-6 h-6 border-4 border-slate-500 border-t-white rounded-full animate-spin"></div> : (isAutoSpinning ? 'AUTO' : 'SPIN')}</button>
                         </>
                     )}
                 </div>

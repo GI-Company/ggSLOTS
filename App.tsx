@@ -1,18 +1,33 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { UserProfile, CurrencyType, ViewType, GameConfig, WinResult } from './types';
 import { supabaseService } from './services/supabaseService';
 import { geoService } from './services/geoService';
 import { Layout } from './components/Layout';
 import { Lobby } from './components/Lobby';
-import { SlotGame } from './components/SlotGame';
-import { PlinkoGame } from './components/PlinkoGame';
-import { BlackjackGame } from './components/BlackjackGame';
-import { ScratchGame } from './components/ScratchGame';
-import { PokerGame } from './components/PokerGame';
 import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
 import { GeoBlock } from './components/GeoBlock';
 import { TermsModal, PrivacyModal, ResponsibleGamingModal } from './components/Legal';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import toast, { Toaster } from 'react-hot-toast';
+
+// --- LAZY LOADED GAMES (Performance Optimization) ---
+// Using module renaming for named exports
+const SlotGame = React.lazy(() => import('./components/SlotGame').then(m => ({ default: m.SlotGame })));
+const PlinkoGame = React.lazy(() => import('./components/PlinkoGame').then(m => ({ default: m.PlinkoGame })));
+const BlackjackGame = React.lazy(() => import('./components/BlackjackGame').then(m => ({ default: m.BlackjackGame })));
+const ScratchGame = React.lazy(() => import('./components/ScratchGame').then(m => ({ default: m.ScratchGame })));
+const PokerGame = React.lazy(() => import('./components/PokerGame').then(m => ({ default: m.PokerGame })));
+const BingoGame = React.lazy(() => import('./components/BingoGame').then(m => ({ default: m.BingoGame })));
+
+const GameLoader = () => (
+    <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-indigo-400 font-bold tracking-widest text-xs uppercase animate-pulse">Loading Game Asset...</div>
+        </div>
+    </div>
+);
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -61,16 +76,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
       if(notification) {
-          const timer = setTimeout(() => setNotification(null), 5000);
-          return () => clearTimeout(timer);
+          toast.success(notification, { duration: 5000, icon: '🎁' });
+          setNotification(null);
       }
   }, [notification]);
 
   const handleAuth = async (email: string, password?: string, profileData?: any) => {
     const { data, message, error } = await supabaseService.auth.signIn(email, password, profileData);
-    if (error) { alert(error); return; }
+    if (error) { toast.error(error); return; }
     if(data) setUser(data);
-    if(message) setNotification(message);
+    if(message) toast.success(message);
     setAuthModalType(null);
   };
 
@@ -79,7 +94,7 @@ const App: React.FC = () => {
       const { user: guest, message } = await supabaseService.auth.signInAsGuest();
       setUser(guest);
       setCurrency(CurrencyType.GC);
-      if (message) setNotification(message);
+      if (message) toast.success(message);
       return guest;
   };
 
@@ -89,6 +104,7 @@ const App: React.FC = () => {
     await supabaseService.auth.signOut();
     setUser(null);
     setCurrentView('main');
+    toast.success("Logged out successfully");
   };
 
   const handlePurchase = async (pkg: any) => { 
@@ -96,21 +112,21 @@ const App: React.FC = () => {
       // Simulate successful payment
       const updatedUser = await supabaseService.db.purchasePackage(pkg.price, pkg.gcAmount, pkg.scAmount);
       setUser(updatedUser);
-      setNotification(`Purchased ${pkg.gcAmount} GC + ${pkg.scAmount} SC!`);
+      toast.success(`Purchased ${pkg.gcAmount.toLocaleString()} GC + ${pkg.scAmount} SC!`);
   };
 
   const handleRedeem = async (amount: number) => {
     if (!user || user.isGuest) return;
     const updatedUser = await supabaseService.db.redeem(amount);
     setUser(updatedUser);
-    alert(`Redemption of ${amount} SC request received! Funds will arrive in 1-3 business days.`);
+    toast.success(`Redemption request for ${amount.toFixed(2)} SC submitted!`);
   };
 
   const handleKycUpdate = async (status: 'pending') => {
       if (!user) return;
       await supabaseService.auth.submitKyc(user.id);
       setUser(prev => prev ? { ...prev, kycStatus: status } : null);
-      setNotification("KYC Documents Submitted. Verification in progress.");
+      toast.success("KYC Documents Submitted.");
   };
 
   const handleGameSpin = async (wager: number, isFreeSpin: boolean = false, plinkoConfig?: any): Promise<WinResult> => {
@@ -200,113 +216,144 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout 
-        user={user} 
-        currency={currency} 
-        setCurrency={setCurrency} 
-        currentView={currentView}
-        setView={setCurrentView}
-        onLogin={() => setAuthModalType('login')}
-        onRegister={() => setAuthModalType('register')}
-        onLogout={handleLogout}
-        sidebarCollapsed={sidebarCollapsed}
-        setSidebarCollapsed={setSidebarCollapsed}
-        visualBalanceOverride={visualBalanceOverride}
-        openLegalModal={(type) => setLegalModal(type)}
-    >
-        {renderContent()}
+    <>
+        <Toaster 
+            position="top-center"
+            toastOptions={{
+                style: {
+                    background: '#0f172a',
+                    color: '#fff',
+                    border: '1px solid #334155',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+                    padding: '16px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                },
+                success: {
+                    iconTheme: { primary: '#10b981', secondary: '#fff' },
+                    style: { border: '1px solid rgba(16, 185, 129, 0.3)' }
+                },
+                error: {
+                    iconTheme: { primary: '#ef4444', secondary: '#fff' },
+                    style: { border: '1px solid rgba(239, 68, 68, 0.3)' }
+                }
+            }}
+        />
+        <Layout 
+            user={user} 
+            currency={currency} 
+            setCurrency={setCurrency} 
+            currentView={currentView}
+            setView={setCurrentView}
+            onLogin={() => setAuthModalType('login')}
+            onRegister={() => setAuthModalType('register')}
+            onLogout={handleLogout}
+            sidebarCollapsed={sidebarCollapsed}
+            setSidebarCollapsed={setSidebarCollapsed}
+            visualBalanceOverride={visualBalanceOverride}
+            openLegalModal={(type) => setLegalModal(type)}
+        >
+            {renderContent()}
 
-        {notification && (
-            <div className="fixed top-24 right-4 z-[80] bg-indigo-600 text-white px-6 py-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300 border border-indigo-400/50 flex items-center gap-3">
-                <span className="text-2xl">🎁</span>
-                <div>
-                    <h4 className="font-bold">Notification</h4>
-                    <p className="text-sm text-indigo-100">{notification}</p>
-                </div>
-            </div>
-        )}
+            {authModalType && (
+                <AuthModal type={authModalType} onClose={() => setAuthModalType(null)} onAuth={handleAuth} />
+            )}
 
-        {authModalType && (
-            <AuthModal type={authModalType} onClose={() => setAuthModalType(null)} onAuth={handleAuth} />
-        )}
+            {showKyc && user && (
+                <KycModal onClose={() => setShowKyc(false)} user={user} onStatusUpdate={handleKycUpdate} />
+            )}
 
-        {showKyc && user && (
-            <KycModal onClose={() => setShowKyc(false)} user={user} onStatusUpdate={handleKycUpdate} />
-        )}
+            {/* Legal Modals */}
+            {legalModal === 'terms' && <TermsModal onClose={() => setLegalModal(null)} />}
+            {legalModal === 'privacy' && <PrivacyModal onClose={() => setLegalModal(null)} />}
+            {legalModal === 'responsible' && <ResponsibleGamingModal onClose={() => setLegalModal(null)} />}
 
-        {/* Legal Modals */}
-        {legalModal === 'terms' && <TermsModal onClose={() => setLegalModal(null)} />}
-        {legalModal === 'privacy' && <PrivacyModal onClose={() => setLegalModal(null)} />}
-        {legalModal === 'responsible' && <ResponsibleGamingModal onClose={() => setLegalModal(null)} />}
+            {/* --- GAME ROUTES --- */}
+            <Suspense fallback={<GameLoader />}>
+                <ErrorBoundary componentName={activeGame?.title} onReset={closeGame}>
+                    {activeGame && activeGame.id.includes('plinko') && (
+                        <PlinkoGame 
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
+                            user={user}
+                            onClose={closeGame}
+                            onSpin={(wager, isFreeSpin, config) => handleGameSpin(wager, isFreeSpin, config)}
+                            isPaused={!sidebarCollapsed}
+                            onVisualBalanceChange={setVisualBalanceOverride}
+                        />
+                    )}
 
-        {/* --- GAME ROUTES --- */}
-        {/* KEY PROP ADDED TO ALL GAMES TO FORCE RESET ON CURRENCY SWITCH */}
+                    {activeGame && activeGame.id.includes('bingo') && (
+                        <BingoGame
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
+                            user={user}
+                            onClose={closeGame}
+                            onSpin={(wager, isFreeSpin) => handleGameSpin(wager, isFreeSpin)}
+                            isPaused={!sidebarCollapsed}
+                            onVisualBalanceChange={setVisualBalanceOverride}
+                        />
+                    )}
 
-        {activeGame && activeGame.id.includes('plinko') && (
-            <PlinkoGame 
-                key={`${activeGame.id}-${currency}`}
-                game={activeGame}
-                currency={currency}
-                balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
-                user={user}
-                onClose={closeGame}
-                onSpin={(wager, isFreeSpin, config) => handleGameSpin(wager, isFreeSpin, config)}
-                isPaused={!sidebarCollapsed}
-                onVisualBalanceChange={setVisualBalanceOverride}
-            />
-        )}
+                    {activeGame && activeGame.id === 'blackjack' && user && (
+                        <BlackjackGame 
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                            user={user}
+                            onClose={closeGame}
+                            onUpdateUser={setUser}
+                            isPaused={!sidebarCollapsed}
+                            onVisualBalanceChange={setVisualBalanceOverride}
+                        />
+                    )}
+                    
+                    {activeGame && activeGame.id === 'video-poker' && user && (
+                        <PokerGame
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                            user={user}
+                            onClose={closeGame}
+                            onUpdateUser={setUser}
+                            isPaused={!sidebarCollapsed}
+                        />
+                    )}
+                    
+                    {activeGame && activeGame.id.includes('scratch') && user && (
+                        <ScratchGame
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            user={user}
+                            onClose={closeGame}
+                            onUpdateUser={setUser}
+                            isPaused={!sidebarCollapsed}
+                        />
+                    )}
 
-        {activeGame && activeGame.id === 'blackjack' && user && (
-            <BlackjackGame 
-                key={`${activeGame.id}-${currency}`}
-                game={activeGame}
-                currency={currency}
-                balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
-                user={user}
-                onClose={closeGame}
-                onUpdateUser={setUser}
-                isPaused={!sidebarCollapsed}
-                onVisualBalanceChange={setVisualBalanceOverride}
-            />
-        )}
-        
-        {activeGame && activeGame.id === 'video-poker' && user && (
-            <PokerGame
-                key={`${activeGame.id}-${currency}`}
-                game={activeGame}
-                currency={currency}
-                balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
-                user={user}
-                onClose={closeGame}
-                onUpdateUser={setUser}
-                isPaused={!sidebarCollapsed}
-            />
-        )}
-        
-        {activeGame && activeGame.id.includes('scratch') && user && (
-             <ScratchGame
-                key={`${activeGame.id}-${currency}`}
-                game={activeGame}
-                user={user}
-                onClose={closeGame}
-                onUpdateUser={setUser}
-                isPaused={!sidebarCollapsed}
-             />
-        )}
-
-        {activeGame && !activeGame.id.includes('plinko') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && (
-            <SlotGame 
-                key={`${activeGame.id}-${currency}`}
-                game={activeGame} 
-                currency={currency}
-                balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
-                user={user}
-                onClose={closeGame}
-                onSpin={handleGameSpin}
-                isPaused={!sidebarCollapsed}
-            />
-        )}
-    </Layout>
+                    {activeGame && !activeGame.id.includes('plinko') && !activeGame.id.includes('bingo') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && (
+                        <SlotGame 
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame} 
+                            currency={currency}
+                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
+                            user={user}
+                            onClose={closeGame}
+                            onSpin={handleGameSpin}
+                            isPaused={!sidebarCollapsed}
+                        />
+                    )}
+                </ErrorBoundary>
+            </Suspense>
+        </Layout>
+    </>
   );
 };
 

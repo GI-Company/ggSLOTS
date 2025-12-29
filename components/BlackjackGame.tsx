@@ -4,6 +4,7 @@ import { GameConfig, CurrencyType, BlackjackState, UserProfile, Card as CardType
 import { WAGER_LEVELS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { Card } from './Card';
+import toast from 'react-hot-toast';
 
 interface BlackjackGameProps {
   game: GameConfig;
@@ -126,7 +127,7 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
   }, [turn, botLeft.hand, botRight.hand]); // Dependencies for bot recursion
 
   const startGame = async () => {
-      if (balance < currentWager) { alert("Insufficient Funds"); return; }
+      if (balance < currentWager) { toast.error("Insufficient Funds"); return; }
       setLoading(true);
       setBotLeft(prev => ({ ...prev, hand: [], score: 0, status: 'waiting' }));
       setBotRight(prev => ({ ...prev, hand: [], score: 0, status: 'waiting' }));
@@ -137,7 +138,7 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
           onUpdateUser(updatedUser);
           setTurn('dealing');
           setLoading(false);
-      } catch (e: any) { alert(e.message); setLoading(false); }
+      } catch (e: any) { toast.error(e.message); setLoading(false); }
   };
 
   const handleHit = async () => {
@@ -159,11 +160,26 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
       setTurn('botRight'); // Don't call service 'stand' yet, wait for Bot 2 to finish
   };
 
+  const handleDouble = async () => {
+      if (!gameState || turn !== 'player') return;
+      if (balance < gameState.wager) { toast.error("Insufficient balance to Double Down"); return; }
+      
+      setLoading(true);
+      try {
+          const { game: updatedGame, user: updatedUser } = await supabaseService.blackjack.doubleDown(gameState.id, user);
+          setGameState(updatedGame);
+          onUpdateUser(updatedUser);
+          setLoading(false);
+          setTurn('botRight'); // Double deals 1 card then finish -> Move to Bot 2
+      } catch (e) { console.error(e); setLoading(false); }
+  };
+
   // Called after Bot 2 finishes
   const finalizeGame = async () => {
       if (!gameState) return;
-      // Now we tell the server the player stood (if they didn't bust earlier)
-      // If player already busted, state is already finalized, but we need to reveal dealer cards visually
+      // If the player already finished via double down or bust, the state in DB is likely final or needs one last 'stand' to settle dealer
+      // Our doubleDown mock service handles settling immediately, so we just check state
+      // If we are in 'active' it means player just STOOD normally
       
       if (gameState.status === 'active') {
           const { game: finalGame, user: finalUser } = await supabaseService.blackjack.stand(gameState.id, user);
@@ -266,6 +282,9 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
                                 <div className="mt-4 bg-slate-900/90 border border-slate-600 px-6 py-2 rounded-full text-white font-bold text-xl shadow-xl backdrop-blur-md flex items-center gap-2">
                                     <span className="text-slate-400 text-xs uppercase">Count</span> {gameState.player_score}
                                 </div>
+                                <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                    Total Bet: {currency === 'GC' ? gameState.wager.toLocaleString() : gameState.wager.toFixed(2)}
+                                </div>
                             </>
                         )}
                         {!gameState && (
@@ -309,17 +328,26 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
                         <button 
                             onClick={handleHit} 
                             disabled={turn !== 'player' || loading} 
-                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-4 px-12 rounded-xl text-xl shadow-lg transform active:scale-[0.98] transition-all"
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-lg transform active:scale-[0.98] transition-all"
                         >
                             HIT
                         </button>
                         <button 
                             onClick={handleStand} 
                             disabled={turn !== 'player' || loading} 
-                            className="bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-4 px-12 rounded-xl text-xl shadow-lg transform active:scale-[0.98] transition-all"
+                            className="bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-lg transform active:scale-[0.98] transition-all"
                         >
                             STAND
                         </button>
+                        {gameState.player_hand.length === 2 && (
+                            <button 
+                                onClick={handleDouble}
+                                disabled={turn !== 'player' || loading || balance < gameState.wager}
+                                className="bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-800 disabled:text-slate-600 text-black font-black py-4 px-10 rounded-xl text-lg shadow-lg transform active:scale-[0.98] transition-all border-b-4 border-yellow-700 disabled:border-transparent"
+                            >
+                                DOUBLE
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

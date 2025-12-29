@@ -1,5 +1,5 @@
 
-import { GameConfig } from './types';
+import { GameConfig, CoinPackage } from './types';
 
 export const REEL_COUNT = 3;
 
@@ -20,15 +20,18 @@ export const WAGER_LEVELS = {
 // Plinko Constants
 export const PLINKO_ROWS = 16; // Max rows supported by UI/Logic
 
-export const COIN_PACKAGES = [ 
-  { price: 2.99, gcAmount: 3000, scAmount: 3.00, isBestValue: false }, 
-  { price: 9.99, gcAmount: 10000, scAmount: 10.00, isBestValue: false }, 
-  { price: 19.99, gcAmount: 22000, scAmount: 21.00, isBestValue: true }, 
-  { price: 49.99, gcAmount: 55000, scAmount: 52.00, isBestValue: false }, 
-  { price: 99.99, gcAmount: 120000, scAmount: 105.00, isBestValue: false }
+export const COIN_PACKAGES: CoinPackage[] = [ 
+  { id: 'pkg_50', price: 50.00, gcAmount: 50000, scAmount: 52.00, isBestValue: false, widgetId: '5028597190' },
+  { id: 'pkg_75', price: 75.00, gcAmount: 80000, scAmount: 78.00, isBestValue: false, widgetId: '6009981129' },
+  { id: 'pkg_100', price: 100.00, gcAmount: 110000, scAmount: 105.00, isBestValue: true, widgetId: '6340706198' },
+  { id: 'pkg_250', price: 250.00, gcAmount: 300000, scAmount: 260.00, isBestValue: false, widgetId: '4664068898' },
+  { id: 'pkg_500', price: 500.00, gcAmount: 650000, scAmount: 520.00, isBestValue: false, widgetId: '6412008290' },
+  { id: 'pkg_750', price: 750.00, gcAmount: 1000000, scAmount: 780.00, isBestValue: false, widgetId: '5115031501' },
+  { id: 'pkg_1000', price: 1000.00, gcAmount: 1500000, scAmount: 1050.00, isBestValue: false, widgetId: '4657647441' },
+  { id: 'pkg_5000', price: 5000.00, gcAmount: 8000000, scAmount: 5250.00, isBestValue: false, widgetId: '4310059261' }
 ];
 
-export const REDEMPTION_UNLOCK_PRICE = 9.99;
+export const REDEMPTION_UNLOCK_PRICE = 49.99; // Adjusted for higher tiers
 export const MIN_REDEMPTION = 50.00;
 
 // --- GAME SPECIFIC ASSETS ---

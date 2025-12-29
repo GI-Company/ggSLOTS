@@ -5,6 +5,7 @@ import { WAGER_LEVELS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { Card } from './Card';
 import { GameRulesModal } from './Modals';
+import toast from 'react-hot-toast';
 
 interface PokerGameProps {
   game: GameConfig;
@@ -26,7 +27,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ game, currency, balance, u
   const currentWager = WAGER_LEVELS[currency][wagerIndex];
 
   const handleDeal = async () => {
-    if (balance < currentWager) { alert("Insufficient Funds"); return; }
+    if (balance < currentWager) { toast.error("Insufficient Funds"); return; }
     setLoading(true);
     setHeldIndices([]); // Reset holds
     try {
@@ -34,7 +35,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ game, currency, balance, u
         setGameState(newGame);
         onUpdateUser(updatedUser);
         setLoading(false);
-    } catch (e: any) { alert(e.message); setLoading(false); }
+    } catch (e: any) { toast.error(e.message); setLoading(false); }
   };
 
   const handleDraw = async () => {
@@ -45,7 +46,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ game, currency, balance, u
           setGameState(updatedGame);
           onUpdateUser(updatedUser);
           setLoading(false);
-      } catch (e: any) { alert(e.message); setLoading(false); }
+      } catch (e: any) { toast.error(e.message); setLoading(false); }
   };
 
   const toggleHold = (idx: number) => {

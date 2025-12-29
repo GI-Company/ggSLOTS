@@ -11,32 +11,25 @@ export type KycStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 export interface UserProfile {
   id: string;
   email: string;
-  // Personal Details
   firstName?: string;
   lastName?: string;
-  dob?: string; // YYYY-MM-DD
-  
-  // Location (Locked after registration)
+  dob?: string;
   addressLine1?: string;
   city?: string;
   state?: string;
   zip?: string;
   country?: string;
-
-  // Security & Compliance
   kycStatus: KycStatus;
-  isAddressLocked: boolean; // True after initial set
-
-  // Balances & Status
+  isAddressLocked: boolean;
   gcBalance: number;
   scBalance: number;
   vipLevel: string;
   hasUnlockedRedemption: boolean;
   redeemableSc: number;
-  isGuest?: boolean; // Flag for demo accounts
-  lastLogin?: number; // Timestamp
-  consecutiveDays?: number; // For daily bonus tracking
-  tenantId?: string; // Multi-tenancy scope
+  isGuest?: boolean;
+  lastLogin?: number;
+  consecutiveDays?: number;
+  tenantId?: string;
 }
 
 export interface GameConfig {
@@ -44,18 +37,17 @@ export interface GameConfig {
   title: string;
   image: string;
   tag?: string;
-  category?: 'Slots' | 'Table' | 'Instant'; // Explicit Category for Lobby Filtering
+  category?: 'Slots' | 'Table' | 'Instant';
   volatility: string;
   minWager: string;
   maxWager: string;
   maxMultiplier: string;
-  isDemo?: boolean; // Controls if game is playable without login
-  rules?: string; // Description for rules modal
-  // New Visual Props for Scalability
+  isDemo?: boolean;
+  rules?: string;
   style?: {
-      background?: string; // CSS gradient or Image URL
-      accentColor?: string; // Hex code for borders/buttons
-      symbolSet?: string; // 'base', 'egypt', 'neon', etc.
+      background?: string;
+      accentColor?: string;
+      symbolSet?: string;
   }
 }
 
@@ -65,6 +57,7 @@ export interface CoinPackage {
   gcAmount: number;
   scAmount: number;
   isBestValue: boolean;
+  widgetId?: string; // NOWPayments Widget ID
 }
 
 export interface WinResult {
@@ -73,26 +66,29 @@ export interface WinResult {
   isBigWin: boolean;
   freeSpinsWon: number;
   bonusText: string;
-  stopIndices: number[]; // Critical for aligning visuals with math
+  stopIndices: number[];
   plinkoOutcome?: {
-      path: number[]; // 0 (Left) or 1 (Right) direction for each row
+      path: number[];
       bucketIndex: number;
       multiplier: number;
       rows: number;
       risk: 'Low' | 'Medium' | 'High';
   };
   scratchOutcome?: ScratchTicket;
+  // Audit Trail Data
+  rngSeed?: string; 
+  serverHash?: string;
 }
 
-// Updated to match 'transaction_events' table in SQL
 export interface GameHistoryEntry {
   id: string;
-  activityId: string; // Was gameId
+  activityId: string;
   timestamp: number;
-  debit: number;    // Was wager
-  credit: number;   // Was payout
+  debit: number;
+  credit: number;
   currency: CurrencyType;
-  result: 'WIN' | 'LOSS' | 'SUCCESS'; // Outcome state
+  result: 'WIN' | 'LOSS' | 'SUCCESS';
+  auditRef?: string; // Reference to the immutable ledger row
 }
 
 export interface SessionEntry {
@@ -103,7 +99,6 @@ export interface SessionEntry {
 }
 
 // --- BLACKJACK TYPES ---
-
 export interface Card {
   suit: 'H' | 'D' | 'C' | 'S';
   rank: string;
@@ -129,16 +124,16 @@ export interface PokerState {
     deck: Card[];
     hand: Card[];
     stage: 'deal' | 'draw' | 'over';
-    heldIndices: number[]; // Indices of cards held by player
+    heldIndices: number[]; 
     wager: number;
     currency: CurrencyType;
     winAmount: number;
-    handName: string; // e.g., "Full House"
+    handName: string;
 }
 
 // --- SCRATCH TYPES ---
 export interface ScratchTicket {
-    grid: string[]; // 9 symbols
+    grid: string[];
     prize: number;
     currency: CurrencyType;
     isWin: boolean;

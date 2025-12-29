@@ -1,40 +1,45 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Safely access environment variables to prevent crashes in environments where import.meta.env is undefined
+// Safely access environment variables
 const getEnvVar = (key: string) => {
   let value = '';
-
-  // 1. Try Vite / ES Modules (import.meta.env)
+  // 1. Try Vite / ES Modules
   try {
-    // Check if import.meta exists first
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
       // @ts-ignore
       value = import.meta.env[key] || '';
     }
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
 
   if (value) return value;
   
-  // 2. Try Node / Webpack / CRA (process.env)
+  // 2. Try Node / Process
   try {
     if (typeof process !== 'undefined' && process.env) {
       value = process.env[key] || '';
     }
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
   
   return value;
 };
 
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL') || getEnvVar('REACT_APP_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY') || getEnvVar('REACT_APP_SUPABASE_ANON_KEY');
+// Check for VITE_, REACT_APP_, and NEXT_PUBLIC_ prefixes to be robust
+const getVar = (base: string) => {
+    return getEnvVar(`VITE_${base}`) || 
+           getEnvVar(`REACT_APP_${base}`) || 
+           getEnvVar(`NEXT_PUBLIC_${base}`) ||
+           getEnvVar(base); // Direct access
+};
 
-// We export a null client if env vars are missing so the App knows to use the Mock Service
+const supabaseUrl = getVar('SUPABASE_URL');
+const supabaseAnonKey = getVar('SUPABASE_ANON_KEY');
+
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn("Supabase Credentials missing. App will run in Mock Mode.");
+}
+
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
