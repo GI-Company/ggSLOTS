@@ -40,6 +40,27 @@ graph TD
 
 ---
 
+## 🎮 Game Library
+
+### Slots (25+ Titles)
+Includes dynamic volatility math models (Low/Medium/High) and themes like:
+*   **Cosmic Cash** (Medium Volatility)
+*   **Pyramid Riches** (High Volatility)
+*   **Viking Victory** (Medium Volatility)
+*   **Neon Nights** (High Volatility)
+*   **Sweet Bonanza** (Cluster Pays Style)
+*   **Dead or Alive** (High Risk/Reward)
+
+### Table Games
+*   **Cosmic Blackjack**: Standard 3:2 payout, Dealer stands on 17.
+*   **Jacks or Better Poker**: Full 9/6 Paytable Video Poker.
+
+### Instant Win
+*   **Plinko**: 3 Variants (Classic, X-Treme, Party). Custom physics engine with server-side path validation.
+*   **Scratch Cards**: 6 Themed cards (Lucky 7s, Zombie Zone, etc.) using Canvas API for scratch effect.
+
+---
+
 ## 💾 Database Schema (Blueprints)
 
 The backend logic relies on this specific SQL schema structure:
@@ -59,13 +80,6 @@ A write-only audit trail of every transaction.
 - `wager_amount`: BigInt
 - `payout_amount`: BigInt
 - `outcome_data`: JSONB (Reel positions, card hands, etc.)
-
-### 3. `games` (Stateful Session Store)
-Used for multi-step games like Blackjack.
-- `stage`: 'active' | 'settled'
-- `dealer_hand`: JSONB array
-- `player_hand`: JSONB array
-- `deck`: JSONB array (The remaining shoe)
 
 ---
 
@@ -88,18 +102,8 @@ The "Brain" of the casino lives in `services/supabaseService.ts` mapping to thes
     2. Uses `SKIP LOCKED` to handle 1000+ concurrent buyers.
     3. If pool is empty, transaction aborts.
 
-### `start_blackjack` / `hit` / `stand`
+### `start_blackjack` / `hit` / `stand` / `deal_poker`
 *   **Logic:** The shuffling and dealing happen inside the database. The client only receives the visible cards.
-
----
-
-## 📡 Realtime Event Bus
-
-The frontend uses **Optimistic UI** backed by **Realtime Confirmation**.
-
-1.  **Balance Sync:** `useWallet` hook subscribes to `postgres_changes` on the `profiles` table.
-    *   *Effect:* If you play on Desktop, your Mobile balance updates instantly.
-2.  **Game Events:** (Optional) High-frequency updates (mouse cursors, chat) are sent via `supabase.channel().send()` using Ephemeral Broadcasts to save DB write costs.
 
 ---
 
@@ -112,19 +116,13 @@ VITE_SUPABASE_URL=your_project_url
 VITE_SUPABASE_ANON_KEY=your_public_anon_key
 ```
 
-### 2. Database Migration
-Run the SQL scripts provided in the `sql/` folder (conceptually) in your Supabase SQL Editor:
-1.  **Schema Setup**: Tables & RLS Policies.
-2.  **Functions**: The PL/pgSQL RPCs.
-3.  **Seed Data**: Populate Scratch Card pools.
-
-### 3. Run Client
+### 2. Run Client
 ```bash
 npm install
 npm run dev
 ```
 
-### 4. Mock Mode (Fallback)
+### 3. Mock Mode (Fallback)
 If no Supabase credentials are provided, the app falls back to `lib/supabaseClient.ts` -> `null`, triggering the local simulation mode in `services/supabaseService.ts`.
 
 ---
@@ -136,4 +134,3 @@ If no Supabase credentials are provided, the app falls back to `lib/supabaseClie
 *   **State Management:** React Hooks + Supabase Realtime Subscription
 *   **Backend:** Supabase (PostgreSQL 15)
 *   **Animation:** CSS Transitions, Canvas API (Scratch Cards)
-

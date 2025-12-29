@@ -11,6 +11,18 @@ interface ScratchGameProps {
   isPaused: boolean;
 }
 
+// Theme Configuration
+const getThemeColors = (gameId: string) => {
+    switch(gameId) {
+        case 'scratch-777': return { border: 'border-red-600', foil: ['#dc2626', '#ef4444', '#b91c1c'], text: 'text-red-500', title: 'LUCKY 7s' };
+        case 'scratch-gold': return { border: 'border-yellow-500', foil: ['#f59e0b', '#fcd34d', '#d97706'], text: 'text-yellow-500', title: 'GOLD RUSH' };
+        case 'scratch-neon': return { border: 'border-fuchsia-500', foil: ['#c026d3', '#e879f9', '#a21caf'], text: 'text-fuchsia-500', title: 'NEON SCRATCH' };
+        case 'scratch-zombie': return { border: 'border-lime-600', foil: ['#65a30d', '#a3e635', '#4d7c0f'], text: 'text-lime-500', title: 'ZOMBIE ZONE' };
+        case 'scratch-diamond': return { border: 'border-cyan-400', foil: ['#0891b2', '#22d3ee', '#155e75'], text: 'text-cyan-400', title: 'DIAMOND DREAMS' };
+        default: return { border: 'border-indigo-500', foil: ['#4f46e5', '#818cf8', '#4338ca'], text: 'text-indigo-500', title: 'COSMIC SCRATCH' };
+    }
+};
+
 export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, onUpdateUser, isPaused }) => {
   const [currencyMode, setCurrencyMode] = useState<CurrencyType>(CurrencyType.GC);
   const [loading, setLoading] = useState(false);
@@ -19,6 +31,8 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
   const [isFullyRevealed, setIsFullyRevealed] = useState(false);
   const [isAutoScratching, setIsAutoScratching] = useState(false);
   const [cursorPos, setCursorPos] = useState<{x: number, y: number} | null>(null);
+
+  const theme = getThemeColors(game.id);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,14 +54,16 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
         
         // Create Gradient for the foil
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        if (ticket.currency === CurrencyType.GC) {
-            gradient.addColorStop(0, '#f59e0b'); // Amber
-            gradient.addColorStop(0.5, '#fcd34d');
-            gradient.addColorStop(1, '#d97706');
+        
+        // Override foil color if using generic SC (green) but respect theme for GC or if theme allows
+        if (ticket.currency === CurrencyType.SC && game.id === 'scratch-cosmic') {
+             gradient.addColorStop(0, '#10b981'); // Emerald
+             gradient.addColorStop(0.5, '#34d399');
+             gradient.addColorStop(1, '#059669');
         } else {
-            gradient.addColorStop(0, '#10b981'); // Emerald
-            gradient.addColorStop(0.5, '#34d399');
-            gradient.addColorStop(1, '#059669');
+             gradient.addColorStop(0, theme.foil[0]);
+             gradient.addColorStop(0.5, theme.foil[1]);
+             gradient.addColorStop(1, theme.foil[2]);
         }
         
         ctx.fillStyle = gradient;
@@ -68,7 +84,7 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
         ctx.font = 'bold 16px Inter';
         ctx.fillText('SCRATCH TO REVEAL', canvas.width/2, canvas.height/2 + 30);
     }
-  }, [ticket]);
+  }, [ticket, game.id, theme]);
 
   // Scratch Logic
   const handleScratch = (e: React.MouseEvent | React.TouchEvent) => {
@@ -195,17 +211,9 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
       setTicket(null);
   };
 
-  const renderSymbol = (sym: string) => {
-      return (
-          <div className="w-full h-full flex items-center justify-center bg-slate-800/50 rounded-lg border border-slate-700 text-4xl shadow-inner">
-              {sym}
-          </div>
-      );
-  };
-
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
-         <div className="relative w-full max-w-4xl h-[90vh] bg-slate-900 rounded-3xl border-4 border-indigo-500/50 shadow-2xl flex flex-col items-center overflow-hidden">
+         <div className={`relative w-full max-w-4xl h-[90vh] bg-slate-900 rounded-3xl border-4 shadow-2xl flex flex-col items-center overflow-hidden ${theme.border}`}>
             
              {/* DEMO / GUEST BANNER */}
              {(user.isGuest || currencyMode === 'GC') && (
@@ -215,12 +223,12 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
              )}
 
              {/* Header */}
-             <div className="w-full h-16 sm:h-20 bg-slate-950 border-b border-indigo-900 flex justify-between items-center px-4 sm:px-6 z-20 shrink-0">
+             <div className="w-full h-16 sm:h-20 bg-slate-950 border-b border-slate-800 flex justify-between items-center px-4 sm:px-6 z-20 shrink-0">
                 <div className="flex items-center gap-2">
                     <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400">
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
-                    <h2 className="text-lg sm:text-xl font-bold text-white font-display tracking-wider truncate">COSMIC SCRATCH</h2>
+                    <h2 className={`text-lg sm:text-xl font-bold font-display tracking-wider truncate ${theme.text}`}>{theme.title}</h2>
                 </div>
                 
                 {/* Balance Display */}

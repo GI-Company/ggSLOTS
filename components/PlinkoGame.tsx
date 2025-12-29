@@ -48,6 +48,13 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
 
   const visualBalance = balance - pendingWins - optimisticDebit;
 
+  // Theming Logic
+  const theme = useMemo(() => {
+     if (game.id === 'plinko-x') return { title: 'PLINKO X', color: 'text-red-500', ball: 'bg-red-500', border: 'border-red-500/50' };
+     if (game.id === 'plinko-party') return { title: 'PLINKO PARTY', color: 'text-purple-500', ball: 'bg-purple-500', border: 'border-purple-500/50' };
+     return { title: 'PLINKO', color: 'text-pink-500', ball: 'bg-pink-500', border: 'border-pink-500/50' };
+  }, [game.id]);
+
   useEffect(() => {
      onVisualBalanceChange(visualBalance);
      return () => onVisualBalanceChange(null);
@@ -164,7 +171,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                   pegs.push(
                     <div key={`peg-${r}-${c}`} className="absolute w-0 h-0" style={{ left: `${x}%`, top: `${y}%` }}>
                          <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${pegSize} bg-slate-400 rounded-full shadow-sm`} />
-                         <div className="absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-pink-500 rounded-full blur-sm transition-opacity duration-75" style={{ opacity: active ? active.opacity : 0 }} />
+                         <div className={`absolute -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full blur-sm transition-opacity duration-75 ${theme.ball}`} style={{ opacity: active ? active.opacity : 0 }} />
                     </div>
                   );
               }
@@ -195,7 +202,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
-        <div className="relative w-full max-w-6xl h-[90vh] bg-slate-900 rounded-3xl border-4 border-pink-500/50 shadow-2xl flex flex-col overflow-hidden">
+        <div className={`relative w-full max-w-6xl h-[90vh] bg-slate-900 rounded-3xl border-4 shadow-2xl flex flex-col overflow-hidden ${theme.border}`}>
              
              {/* TOP BAR: Banner - Now positioned relatively in flex column to not cover sidebar controls */}
              {(user?.isGuest || currency === 'GC') && (
@@ -205,7 +212,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
              )}
 
              {isPaused && <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center"><h2 className="text-3xl font-bold text-white font-display">PAUSED</h2></div>}
-             {showRules && <GameRulesModal onClose={() => setShowRules(false)} gameTitle="Plinko" />}
+             {showRules && <GameRulesModal onClose={() => setShowRules(false)} gameTitle={theme.title} />}
 
              <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
                 {/* SETTINGS PANEL (Desktop) / DRAWER (Mobile) */}
@@ -218,7 +225,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                         <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 group">
                             <svg className="w-6 h-6 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         </button>
-                        <h2 className="text-xl font-bold text-white font-display tracking-wider text-pink-500">PLINKO</h2>
+                        <h2 className={`text-xl font-bold font-display tracking-wider ${theme.color}`}>{theme.title}</h2>
                     </div>
 
                     {/* Mobile Close Button for Drawer */}
@@ -236,13 +243,13 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                             <label className="text-xs text-slate-400 font-bold uppercase block mb-2">Risk Level</label>
                             <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg">
                                 {(['Low', 'Medium', 'High'] as const).map(lvl => (
-                                    <button key={lvl} onClick={() => setRiskLevel(lvl)} className={`py-2 rounded text-xs font-bold transition-all ${riskLevel === lvl ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>{lvl}</button>
+                                    <button key={lvl} onClick={() => setRiskLevel(lvl)} className={`py-2 rounded text-xs font-bold transition-all ${riskLevel === lvl ? `text-white shadow ${theme.ball.replace('bg-', 'bg-')}` : 'text-slate-400 hover:text-white'}`}>{lvl}</button>
                                 ))}
                             </div>
                         </div>
                         <div>
                             <div className="flex justify-between mb-2"><label className="text-xs text-slate-400 font-bold uppercase block">Rows</label><span className="text-xs font-bold text-white">{rowCount}</span></div>
-                            <input type="range" min="8" max="16" step="1" value={rowCount} onChange={(e) => setRowCount(parseInt(e.target.value))} className="w-full accent-pink-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                            <input type="range" min="8" max="16" step="1" value={rowCount} onChange={(e) => setRowCount(parseInt(e.target.value))} className={`w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-${theme.color.replace('text-', '')}`} />
                             <div className="flex justify-between text-[10px] text-slate-600 font-bold mt-1"><span>8</span><span>12</span><span>16</span></div>
                         </div>
                         <div>
@@ -256,7 +263,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                     </div>
 
                     <div className="mt-auto space-y-2">
-                        <button onClick={dropBall} className="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white font-black text-xl rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] transform active:scale-[0.98] transition-all">DROP BALL</button>
+                        <button onClick={dropBall} className={`w-full py-4 text-white font-black text-xl rounded-xl shadow-lg transform active:scale-[0.98] transition-all ${theme.ball}`}>DROP BALL</button>
                         <button onClick={() => setShowRules(true)} className="w-full py-2 text-slate-500 hover:text-white text-xs font-bold">GAME RULES & PAYOUTS</button>
                     </div>
                 </div>
@@ -279,7 +286,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40">
                             <button 
                                 onClick={dropBall} 
-                                className="bg-pink-600 hover:bg-pink-500 text-white font-black py-3 px-10 rounded-full shadow-[0_0_20px_rgba(236,72,153,0.4)] transform hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-pink-400/30"
+                                className={`${theme.ball} hover:brightness-110 text-white font-black py-3 px-10 rounded-full shadow-lg transform hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20`}
                             >
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
                                 DROP
@@ -297,7 +304,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                             const y = startPos.y + (endPos.y - startPos.y) * (p * p) - Math.sin(p * Math.PI) * (20 / rowCount);
                             const ballSize = rowCount > 12 ? 'w-2 h-2' : 'w-3 h-3';
                             return (
-                                <div key={ball.id} className={`absolute ${ballSize} bg-pink-500 rounded-full shadow-[0_0_10px_#ec4899] z-10 will-change-transform`} style={{ left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -50%) rotate(${ball.rotation}deg)` }}>
+                                <div key={ball.id} className={`absolute ${ballSize} ${theme.ball} rounded-full shadow-lg z-10 will-change-transform`} style={{ left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -50%) rotate(${ball.rotation}deg)` }}>
                                     <div className="w-full h-full bg-white/30 rounded-full scale-50 ml-[1px] mt-[1px]"></div>
                                 </div>
                             );

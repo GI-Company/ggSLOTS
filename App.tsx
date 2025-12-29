@@ -8,6 +8,7 @@ import { SlotGame } from './components/SlotGame';
 import { PlinkoGame } from './components/PlinkoGame';
 import { BlackjackGame } from './components/BlackjackGame';
 import { ScratchGame } from './components/ScratchGame';
+import { PokerGame } from './components/PokerGame';
 import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
 
 const App: React.FC = () => {
@@ -212,7 +213,9 @@ const App: React.FC = () => {
             <KycModal onClose={() => setShowKyc(false)} user={user} onStatusUpdate={handleKycUpdate} />
         )}
 
-        {activeGame && activeGame.id === 'plinko' && (
+        {/* --- GAME ROUTES --- */}
+
+        {activeGame && activeGame.id.includes('plinko') && (
             <PlinkoGame 
                 game={activeGame}
                 currency={currency}
@@ -238,7 +241,19 @@ const App: React.FC = () => {
             />
         )}
         
-        {activeGame && activeGame.id === 'scratch-cosmic' && user && (
+        {activeGame && activeGame.id === 'video-poker' && user && (
+            <PokerGame
+                game={activeGame}
+                currency={currency}
+                balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                user={user}
+                onClose={closeGame}
+                onUpdateUser={setUser}
+                isPaused={!sidebarCollapsed}
+            />
+        )}
+        
+        {activeGame && activeGame.id.includes('scratch') && user && (
              <ScratchGame
                 game={activeGame}
                 user={user}
@@ -248,7 +263,7 @@ const App: React.FC = () => {
              />
         )}
 
-        {activeGame && activeGame.id !== 'plinko' && activeGame.id !== 'blackjack' && activeGame.id !== 'scratch-cosmic' && (
+        {activeGame && !activeGame.id.includes('plinko') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && (
             <SlotGame 
                 game={activeGame} 
                 currency={currency}

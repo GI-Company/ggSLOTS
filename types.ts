@@ -116,6 +116,19 @@ export interface BlackjackState {
   payout: number;
 }
 
+// --- POKER TYPES ---
+export interface PokerState {
+    id: string;
+    deck: Card[];
+    hand: Card[];
+    stage: 'deal' | 'draw' | 'over';
+    heldIndices: number[]; // Indices of cards held by player
+    wager: number;
+    currency: CurrencyType;
+    winAmount: number;
+    handName: string; // e.g., "Full House"
+}
+
 // --- SCRATCH TYPES ---
 export interface ScratchTicket {
     grid: string[]; // 9 symbols

@@ -1,5 +1,5 @@
 
-import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket, KycStatus } from '../types';
+import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket, KycStatus, PokerState } from '../types';
 import { REDEMPTION_UNLOCK_PRICE, GAME_DATA, PAYLINES } from '../constants';
 import { supabase } from '../lib/supabaseClient';
 
@@ -252,7 +252,7 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
     };
 };
 
-// --- MOCK BLACKJACK ENGINE ---
+// --- CARD LOGIC ---
 const generateDeck = (): Card[] => {
     const suits: ('H' | 'D' | 'C' | 'S')[] = ['H', 'D', 'C', 'S'];
     const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
@@ -273,6 +273,7 @@ const generateDeck = (): Card[] => {
     return deck;
 };
 
+// --- BLACKJACK LOGIC ---
 const calculateHandScore = (hand: Card[]): number => {
     let score = 0;
     let aces = 0;
@@ -288,6 +289,7 @@ const calculateHandScore = (hand: Card[]): number => {
 };
 
 const MOCK_GAMES_STORE: Record<string, BlackjackState> = {};
+const MOCK_POKER_STORE: Record<string, PokerState> = {};
 
 // Helper to map RPC result to BlackjackState
 const mapDBGameToState = (data: any): BlackjackState => {
@@ -309,6 +311,57 @@ const mapDBGameToState = (data: any): BlackjackState => {
         payout: 0 
     };
 };
+
+// --- POKER EVALUATION LOGIC ---
+const evaluatePokerHand = (hand: Card[]): { rank: number, name: string, multiplier: number } => {
+    // 1. Sort by value for easier analysis (A=14 for sorting, but handle low A later)
+    const sorted = [...hand].sort((a, b) => {
+        const valA = a.rank === 'A' ? 14 : (['K','Q','J'].includes(a.rank) ? (a.rank==='K'?13:a.rank==='Q'?12:11) : parseInt(a.rank));
+        const valB = b.rank === 'A' ? 14 : (['K','Q','J'].includes(b.rank) ? (b.rank==='K'?13:b.rank==='Q'?12:11) : parseInt(b.rank));
+        return valA - valB;
+    });
+
+    const ranks = sorted.map(c => c.rank === 'A' ? 14 : (['K','Q','J'].includes(c.rank) ? (c.rank==='K'?13:c.rank==='Q'?12:11) : parseInt(c.rank)));
+    const suits = sorted.map(c => c.suit);
+
+    const isFlush = suits.every(s => s === suits[0]);
+    
+    // Check Straight
+    let isStraight = true;
+    for (let i = 0; i < 4; i++) {
+        if (ranks[i+1] !== ranks[i] + 1) {
+            isStraight = false; 
+            break;
+        }
+    }
+    // Special Ace Low Straight (A, 2, 3, 4, 5) -> Ranks: 2, 3, 4, 5, 14
+    if (!isStraight && ranks[0]===2 && ranks[1]===3 && ranks[2]===4 && ranks[3]===5 && ranks[4]===14) {
+        isStraight = true;
+    }
+
+    const rankCounts: Record<number, number> = {};
+    ranks.forEach(r => rankCounts[r] = (rankCounts[r] || 0) + 1);
+    const counts = Object.values(rankCounts).sort((a,b) => b-a); // Sort counts descending (e.g. [4,1] is 4 of kind)
+
+    // Evaluate
+    if (isFlush && isStraight && ranks[4] === 14 && ranks[0] === 10) return { rank: 10, name: 'Royal Flush', multiplier: 800 };
+    if (isFlush && isStraight) return { rank: 9, name: 'Straight Flush', multiplier: 50 };
+    if (counts[0] === 4) return { rank: 8, name: 'Four of a Kind', multiplier: 25 };
+    if (counts[0] === 3 && counts[1] === 2) return { rank: 7, name: 'Full House', multiplier: 9 };
+    if (isFlush) return { rank: 6, name: 'Flush', multiplier: 6 };
+    if (isStraight) return { rank: 5, name: 'Straight', multiplier: 4 };
+    if (counts[0] === 3) return { rank: 4, name: 'Three of a Kind', multiplier: 3 };
+    if (counts[0] === 2 && counts[1] === 2) return { rank: 3, name: 'Two Pair', multiplier: 2 };
+    
+    if (counts[0] === 2) {
+        // Check Jacks or Better
+        const pairRank = parseInt(Object.keys(rankCounts).find(key => rankCounts[parseInt(key)] === 2)!);
+        if (pairRank >= 11) return { rank: 2, name: 'Jacks or Better', multiplier: 1 };
+    }
+
+    return { rank: 1, name: 'High Card', multiplier: 0 };
+};
+
 
 // --- SERVICE EXPORTS ---
 
@@ -836,6 +889,70 @@ export const supabaseService = {
 
         return { game: { ...game }, user: updatedUser };
     }
+  },
+
+  poker: {
+      deal: async (user: UserProfile, wager: number, currency: CurrencyType): Promise<{ game: PokerState, user: UserProfile }> => {
+          // RPC implementation (mocked)
+          await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+          let updatedUser = { ...user };
+          const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
+          if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
+          updatedUser[balanceField] -= wager;
+          
+          const deck = generateDeck();
+          const hand = [deck.shift()!, deck.shift()!, deck.shift()!, deck.shift()!, deck.shift()!];
+          const gameId = generateIdempotencyKey();
+          
+          const gameState: PokerState = {
+              id: gameId,
+              deck,
+              hand,
+              stage: 'draw',
+              heldIndices: [],
+              wager,
+              currency,
+              winAmount: 0,
+              handName: ''
+          };
+          
+          MOCK_POKER_STORE[gameId] = gameState;
+          const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
+          localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+          return { game: gameState, user: updatedUser };
+      },
+
+      draw: async (gameId: string, heldIndices: number[], user: UserProfile): Promise<{ game: PokerState, user: UserProfile }> => {
+          await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+          const game = MOCK_POKER_STORE[gameId];
+          if (!game || game.stage !== 'draw') throw new Error("Invalid game state");
+
+          let updatedUser = { ...user };
+          const balanceField = game.currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
+
+          // Replace unheld cards
+          const newHand = game.hand.map((card, idx) => {
+              if (heldIndices.includes(idx)) return card;
+              return game.deck.shift()!;
+          });
+
+          game.hand = newHand;
+          game.stage = 'over';
+          
+          const evalResult = evaluatePokerHand(newHand);
+          game.handName = evalResult.name;
+          game.winAmount = game.wager * evalResult.multiplier;
+
+          if (game.winAmount > 0) {
+              updatedUser[balanceField] += game.winAmount;
+              if(game.currency === CurrencyType.SC) updatedUser.redeemableSc += game.winAmount;
+          }
+          
+          const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
+          localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+          
+          return { game: { ...game }, user: updatedUser };
+      }
   },
 
   db: {
