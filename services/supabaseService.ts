@@ -1,5 +1,5 @@
 
-import { UserProfile, CurrencyType, WinResult, GameHistoryEntry } from '../types';
+import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket } from '../types';
 import { REDEMPTION_UNLOCK_PRICE, GAME_DATA, PAYLINES } from '../constants';
 import { supabase } from '../lib/supabaseClient';
 
@@ -11,9 +11,6 @@ const HISTORY_STORAGE_KEY = 'ggslots_history';
 // Default Tenant ID from SQL Schema (Demo Tenant)
 const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
-/**
- * Utility: Generate UUID v4 for Idempotency Keys
- */
 function generateIdempotencyKey(): string {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
         return crypto.randomUUID();
@@ -57,16 +54,10 @@ class FibonacciPRNG {
 const prng = new FibonacciPRNG(Date.now());
 
 // Helper: Generate Multipliers based on Binomial Distribution Inverse
-// This creates a "Risk" profile curve dynamically for any row count.
 const getPlinkoMultipliers = (rows: number, risk: 'Low' | 'Medium' | 'High'): number[] => {
     const multipliers = [];
     const center = rows / 2;
-    
-    // Calculate Binomial Probabilities for each bucket to ensure House Edge is consistent
-    // P(k) = C(n, k) * 0.5^n
     const probabilities = [];
-    
-    // Generate Pascal Triangle Row n for Combinations
     const pascal: number[] = [1];
     for (let i = 0; i < rows; i++) {
         for (let j = i; j > 0; j--) {
@@ -80,30 +71,22 @@ const getPlinkoMultipliers = (rows: number, risk: 'Low' | 'Medium' | 'High'): nu
         probabilities.push(pascal[i] / totalCombinations);
     }
 
-    // Assign raw multipliers inversely proportional to probability, then shape by Risk
     const rawMultipliers = probabilities.map((p, i) => {
         const distFromCenter = Math.abs(i - center);
-        
-        // Base inverse: Lower probability = Higher Multiplier
-        let val = 1 / (p * 100); // Scaling factor
-        
-        // Shape curve based on Risk
+        let val = 1 / (p * 100);
         if (risk === 'High') {
-             val = Math.pow(val, 1.4); // Steeper curve (higher highs, lower lows)
-             if (distFromCenter < rows * 0.2) val = 0.2; // Dead zone in center
+             val = Math.pow(val, 1.4); 
+             if (distFromCenter < rows * 0.2) val = 0.2; 
         } else if (risk === 'Medium') {
              val = Math.pow(val, 1.1);
              if (distFromCenter < rows * 0.15) val = 0.4;
         } else {
-             // Low Risk: Flatter curve
              val = Math.pow(val, 0.8);
              if (val < 0.5) val = 0.5;
         }
-        
         return val;
     });
 
-    // Normalize to ensure RTP (Return to Player) is ~98%
     let currentRTP = 0;
     rawMultipliers.forEach((m, i) => {
         currentRTP += m * probabilities[i];
@@ -113,35 +96,23 @@ const getPlinkoMultipliers = (rows: number, risk: 'Low' | 'Medium' | 'High'): nu
     
     return rawMultipliers.map(m => {
         let final = m * normalizationFactor;
-        
-        // Beautify numbers
-        if (final > 1000) final = Math.round(final); // x1000
-        else if (final > 100) final = Math.round(final); // x100
-        else if (final > 10) final = Math.round(final * 10) / 10; // x10.5
-        else final = Math.round(final * 10) / 10; // x1.5
-        
-        // Hard clamps for visual consistency
+        if (final > 1000) final = Math.round(final); 
+        else if (final > 100) final = Math.round(final);
+        else if (final > 10) final = Math.round(final * 10) / 10;
+        else final = Math.round(final * 10) / 10;
         if (risk === 'High' && Math.abs(rows/2 - rows) === 0 && final > 0.5) final = 0.2;
-
         return final;
     });
 };
 
 const calculatePlinkoResult = (wager: number, rows: number = 12, risk: 'Low' | 'Medium' | 'High' = 'Medium'): { result: WinResult } => {
     const path: number[] = [];
-    
-    // Generate path for the specific number of rows
     for(let i=0; i < rows; i++) {
         path.push(prng.next() > 0.5 ? 1 : 0);
     }
-    
-    // Determine Bucket Index
     const bucketIndex = path.reduce((a, b) => a + b, 0);
-    
-    // Get Multipliers for this specific config
     const multipliers = getPlinkoMultipliers(rows, risk);
     const multiplier = multipliers[bucketIndex] || 0;
-    
     const totalWin = wager * multiplier;
     
     return {
@@ -152,19 +123,12 @@ const calculatePlinkoResult = (wager: number, rows: number = 12, risk: 'Low' | '
             freeSpinsWon: 0,
             bonusText: multiplier >= 10 ? `BIG DROP! x${multiplier}` : '',
             stopIndices: [],
-            plinkoOutcome: {
-                path,
-                bucketIndex,
-                multiplier,
-                rows,
-                risk
-            }
+            plinkoOutcome: { path, bucketIndex, multiplier, rows, risk }
         }
     };
 };
 
 const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean): { result: WinResult } => {
-    // ... (Existing slot logic preserved)
     const gameAssets = GAME_DATA[gameId] || GAME_DATA['default'];
     const strips = gameAssets.strips;
     const payouts = gameAssets.payouts;
@@ -217,7 +181,6 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
     };
 
     let finalOutcome = generateOutcome();
-    
     let freeSpinsWon = 0;
     let bonusText = '';
     
@@ -237,6 +200,45 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
         }
     };
 };
+
+// --- MOCK BLACKJACK ENGINE ---
+const generateDeck = (): Card[] => {
+    const suits: ('H' | 'D' | 'C' | 'S')[] = ['H', 'D', 'C', 'S'];
+    const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+    const deck: Card[] = [];
+    for (const s of suits) {
+        for (const r of ranks) {
+            let val = parseInt(r);
+            if (['J','Q','K'].includes(r)) val = 10;
+            if (r === 'A') val = 11;
+            deck.push({ suit: s, rank: r, value: val });
+        }
+    }
+    // Shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    return deck;
+};
+
+const calculateHandScore = (hand: Card[]): number => {
+    let score = 0;
+    let aces = 0;
+    for (const card of hand) {
+        score += card.value;
+        if (card.rank === 'A') aces++;
+    }
+    while (score > 21 && aces > 0) {
+        score -= 10;
+        aces--;
+    }
+    return score;
+};
+
+const MOCK_GAMES_STORE: Record<string, BlackjackState> = {};
+
+// --- SERVICE EXPORTS ---
 
 export const supabaseService = {
   auth: {
@@ -296,11 +298,10 @@ export const supabaseService = {
   },
 
   game: {
-    // UPDATED SPIN SIGNATURE: accept plinkoConfig
+    // Legacy Slot/Plinko Spin
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean = false, plinkoConfig?: { rows: number, risk: 'Low' | 'Medium' | 'High' }): Promise<{ user: UserProfile, result: WinResult }> => {
         let math: { result: WinResult };
         if (gameId === 'plinko') {
-             // Default to 12 / Medium if not provided
              const rows = plinkoConfig?.rows || 12;
              const risk = plinkoConfig?.risk || 'Medium';
              math = calculatePlinkoResult(wager, rows, risk);
@@ -325,10 +326,8 @@ export const supabaseService = {
                  });
 
                  if (error) throw error;
-                 
                  const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
                  return { user: updatedProfile as UserProfile, result: math.result };
-
              } catch (e) { throw new Error("Transaction failed."); }
         } 
         
@@ -367,6 +366,122 @@ export const supabaseService = {
         return { user: updatedUser, result: math.result };
     },
 
+    // --- NEW: SCRATCH CARD LOGIC ---
+    buyScratchTicket: async (user: UserProfile, currency: CurrencyType): Promise<{ user: UserProfile, result: WinResult }> => {
+        // 1. Cost Configuration
+        const cost = currency === CurrencyType.GC ? 500 : 1.00;
+        
+        if (supabase && !user.isGuest) {
+             // REAL BACKEND CALL (Matches your Phase 1 SQL Architecture)
+             try {
+                 const { data, error } = await supabase.rpc('buy_ticket_dual_currency', { 
+                     mode: currency 
+                 });
+                 if (error) throw error;
+
+                 // RPC returns: { grid: [], prize: number, win: boolean, currency: string, new_balance: number }
+                 const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+                 
+                 const ticket: ScratchTicket = {
+                     grid: data.grid,
+                     prize: data.prize,
+                     currency: currency,
+                     isWin: data.win,
+                     cost,
+                     tier: data.prize > 0 ? (data.prize > cost * 10 ? 'high' : 'mid') : 'loser'
+                 };
+
+                 const result: WinResult = {
+                     totalWin: ticket.prize,
+                     winningLines: [],
+                     isBigWin: ticket.prize >= cost * 10,
+                     freeSpinsWon: 0,
+                     bonusText: '',
+                     stopIndices: [],
+                     scratchOutcome: ticket
+                 };
+
+                 return { user: updatedProfile, result };
+             } catch (e: any) { throw new Error(e.message || "Scratch transaction failed."); }
+        }
+
+        // 2. MOCK SIMULATION (Mimics the SQL "Deck" logic)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        let updatedUser = { ...user };
+        const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
+        
+        if (updatedUser[balanceField] < cost) throw new Error("Insufficient Funds");
+        updatedUser[balanceField] -= cost;
+
+        // Generate Ticket Data
+        // Probabilities: Jackpot (0.1%), High (1%), Mid (5%), Low (15%), Loser (78.9%)
+        // SC is strictly tighter than GC in real life, but we'll use one mock dist for demo smoothness
+        const rand = Math.random();
+        let tier: 'jackpot' | 'high' | 'mid' | 'low' | 'loser' = 'loser';
+        let prize = 0;
+        let grid: string[] = [];
+
+        // SC prizes
+        const scPrizes = { jackpot: 500.00, high: 50.00, mid: 5.00, low: 1.00 };
+        // GC prizes
+        const gcPrizes = { jackpot: 1000000, high: 10000, mid: 1000, low: 200 };
+
+        if (rand < 0.001) tier = 'jackpot';
+        else if (rand < 0.011) tier = 'high';
+        else if (rand < 0.061) tier = 'mid';
+        else if (rand < 0.211) tier = 'low';
+
+        if (tier !== 'loser') {
+            prize = currency === CurrencyType.SC ? scPrizes[tier] : gcPrizes[tier];
+        }
+
+        // Generate Grid Visuals
+        const winSymbol = tier === 'jackpot' ? '💰' : tier === 'high' ? '💎' : tier === 'mid' ? '🍀' : '🎩';
+        const loseSymbols = ['🍒', '🍋', '🐴', '🎩', '💎', '💰', '🍀'];
+        
+        if (tier !== 'loser') {
+             // Create a winning grid (3 matching symbols)
+             grid = [winSymbol, winSymbol, winSymbol];
+             // Fill rest with random losers
+             for(let i=0; i<6; i++) grid.push(loseSymbols[Math.floor(Math.random() * loseSymbols.length)]);
+             // Shuffle
+             for (let i = grid.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [grid[i], grid[j]] = [grid[j], grid[i]];
+            }
+        } else {
+             // Create losing grid (ensure no 3 match)
+             // Simple approach: pick random, if 3 exist, change one.
+             // Mock simplification: Just fill random
+             grid = Array(9).fill(null).map(() => loseSymbols[Math.floor(Math.random() * loseSymbols.length)]);
+        }
+
+        if (prize > 0) {
+            updatedUser[balanceField] += prize;
+            if(currency === CurrencyType.SC) updatedUser.redeemableSc += prize;
+        }
+
+        const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
+        localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+
+        const ticket: ScratchTicket = {
+            grid, prize, currency, isWin: prize > 0, cost, tier
+        };
+
+        return { 
+            user: updatedUser, 
+            result: {
+                totalWin: prize,
+                winningLines: [],
+                isBigWin: tier === 'jackpot' || tier === 'high',
+                freeSpinsWon: 0,
+                bonusText: '',
+                stopIndices: [],
+                scratchOutcome: ticket
+            }
+        };
+    },
+
     getHistory: async (): Promise<GameHistoryEntry[]> => {
         if (supabase) {
             const { data: { session } } = await supabase.auth.getSession();
@@ -392,9 +507,140 @@ export const supabaseService = {
         }).subscribe();
         return () => { supabase.removeChannel(channel); };
     },
-    
-    // Explicit export for UI consumption
+
     getPlinkoMultipliers
+  },
+
+  // --- BLACKJACK ENGINE ---
+  blackjack: {
+    start: async (user: UserProfile, wager: number, currency: CurrencyType): Promise<{ game: BlackjackState, user: UserProfile }> => {
+        if (supabase && !user.isGuest) {
+            // Online: Call RPC
+             const { data, error } = await supabase.rpc('start_game', { p_wager: wager, p_currency: currency });
+             if (error) throw error;
+             
+             // Refresh user balance (deducted by RPC)
+             const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+             return { game: data[0] as BlackjackState, user: updatedProfile as UserProfile };
+        } 
+        
+        // Mock: Local Simulation
+        await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+        
+        let updatedUser = { ...user };
+        const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
+        if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
+        updatedUser[balanceField] -= wager; // Deduct Wager
+
+        const deck = generateDeck();
+        const p_hand = [deck.shift()!, deck.shift()!];
+        const d_hand = [deck.shift()!, deck.shift()!];
+        
+        const gameId = generateIdempotencyKey();
+        const gameState: BlackjackState = {
+            id: gameId,
+            deck,
+            player_hand: p_hand,
+            dealer_hand: d_hand,
+            player_score: calculateHandScore(p_hand),
+            dealer_score: calculateHandScore(d_hand),
+            status: 'active',
+            wager,
+            currency,
+            payout: 0
+        };
+
+        // Instant Blackjack Check
+        if (gameState.player_score === 21) {
+             if (gameState.dealer_score === 21) {
+                 gameState.status = 'push';
+                 gameState.payout = wager; // Return bet
+             } else {
+                 gameState.status = 'player_win';
+                 gameState.payout = wager * 2.5; // 3:2 payout (1.5 + 1)
+             }
+             // Credit win immediately in mock
+             updatedUser[balanceField] += gameState.payout;
+             if(currency === CurrencyType.SC) updatedUser.redeemableSc += gameState.payout;
+        }
+
+        MOCK_GAMES_STORE[gameId] = gameState;
+        const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
+        localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+
+        return { game: gameState, user: updatedUser };
+    },
+
+    hit: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
+        if (supabase && !user.isGuest) {
+            const { data, error } = await supabase.rpc('hit', { game_id: gameId });
+            if (error) throw error;
+            // Balance only changes if bust? Actually usually only on stand/end. 
+            // In typical DB design, bust updates balance (0 payout) or just game status.
+            return { game: data[0], user };
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const game = MOCK_GAMES_STORE[gameId];
+        if (!game || game.status !== 'active') throw new Error("Game invalid");
+
+        const card = game.deck.shift()!;
+        game.player_hand.push(card);
+        game.player_score = calculateHandScore(game.player_hand);
+
+        if (game.player_score > 21) {
+            game.status = 'player_bust';
+            // No Payout
+        }
+
+        return { game: { ...game }, user };
+    },
+
+    stand: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
+        if (supabase && !user.isGuest) {
+            const { data, error } = await supabase.rpc('stand', { game_id: gameId });
+            if (error) throw error;
+            // Game ended, balance might have increased
+            const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+            return { game: data[0], user: updatedProfile };
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500)); // Dealer thinking time
+        const game = MOCK_GAMES_STORE[gameId];
+        let updatedUser = { ...user };
+        const balanceField = game.currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
+
+        // Dealer Logic
+        while (game.dealer_score < 17) {
+             const card = game.deck.shift()!;
+             game.dealer_hand.push(card);
+             game.dealer_score = calculateHandScore(game.dealer_hand);
+        }
+
+        if (game.dealer_score > 21) {
+            game.status = 'dealer_bust';
+            game.payout = game.wager * 2;
+        } else if (game.player_score > game.dealer_score) {
+            game.status = 'player_win';
+            game.payout = game.wager * 2;
+        } else if (game.player_score < game.dealer_score) {
+            game.status = 'dealer_win';
+            game.payout = 0;
+        } else {
+            game.status = 'push';
+            game.payout = game.wager;
+        }
+
+        if (game.payout > 0) {
+            updatedUser[balanceField] += game.payout;
+            if(game.currency === CurrencyType.SC) updatedUser.redeemableSc += game.payout;
+        }
+
+        const storageKey = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
+        localStorage.setItem(storageKey, JSON.stringify(updatedUser));
+
+        return { game: { ...game }, user: updatedUser };
+    }
   },
 
   db: {

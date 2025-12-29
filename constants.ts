@@ -21,7 +21,9 @@ export const PLINKO_ROWS = 12;
 export const PLINKO_MULTIPLIERS = [100, 25, 10, 5, 2, 0.5, 0.2, 0.5, 2, 5, 10, 25, 100];
 
 export const GAMES_LIST = [
+  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '400x500/0f172a/f59e0b?text=Scratch', tag: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: '1 SC', maxMultiplier: 'x2,000', isDemo: true },
   { id: 'plinko', title: 'Plinko', image: '400x500/0f172a/ec4899?text=Plinko', tag: 'New', volatility: 'Variable', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x100', isDemo: true },
+  { id: 'blackjack', title: 'Cosmic Blackjack', image: '400x500/0f172a/10b981?text=Blackjack', tag: 'Table', volatility: 'Low', minWager: '100 GC', maxWager: '500k GC', maxMultiplier: 'x2.5', isDemo: true },
   { id: 'cosmic-cash', title: 'Cosmic Cash', image: '400x500/1e293b/4f46e5?text=Cosmic+Cash', tag: 'Popular', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x5,000', isDemo: true },
   { id: 'pyramid-riches', title: 'Pyramid Riches', image: '400x500/1e293b/f59e0b?text=Pyramid+Riches', tag: 'Hot', volatility: 'High', minWager: '200 GC', maxWager: '2M GC', maxMultiplier: 'x10,000', isDemo: false },
   { id: 'viking-victory', title: 'Viking Victory', image: '400x500/1e293b/be185d?text=Viking+Victory', tag: '', volatility: 'Medium', minWager: '50 GC', maxWager: '500k GC', maxMultiplier: 'x2,500', isDemo: false },

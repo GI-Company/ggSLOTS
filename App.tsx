@@ -6,6 +6,8 @@ import { Layout } from './components/Layout';
 import { Lobby } from './components/Lobby';
 import { SlotGame } from './components/SlotGame';
 import { PlinkoGame } from './components/PlinkoGame';
+import { BlackjackGame } from './components/BlackjackGame';
+import { ScratchGame } from './components/ScratchGame';
 import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal } from './components/Modals';
 
 const App: React.FC = () => {
@@ -184,7 +186,30 @@ const App: React.FC = () => {
             />
         )}
 
-        {activeGame && activeGame.id !== 'plinko' && (
+        {activeGame && activeGame.id === 'blackjack' && user && (
+            <BlackjackGame 
+                game={activeGame}
+                currency={currency}
+                balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                user={user}
+                onClose={closeGame}
+                onUpdateUser={setUser}
+                isPaused={!sidebarCollapsed}
+                onVisualBalanceChange={setVisualBalanceOverride}
+            />
+        )}
+        
+        {activeGame && activeGame.id === 'scratch-cosmic' && user && (
+             <ScratchGame
+                game={activeGame}
+                user={user}
+                onClose={closeGame}
+                onUpdateUser={setUser}
+                isPaused={!sidebarCollapsed}
+             />
+        )}
+
+        {activeGame && activeGame.id !== 'plinko' && activeGame.id !== 'blackjack' && activeGame.id !== 'scratch-cosmic' && (
             <SlotGame 
                 game={activeGame} 
                 currency={currency}

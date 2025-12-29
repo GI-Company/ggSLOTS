@@ -64,6 +64,7 @@ export interface WinResult {
       rows: number;
       risk: 'Low' | 'Medium' | 'High';
   };
+  scratchOutcome?: ScratchTicket;
 }
 
 // Updated to match 'transaction_events' table in SQL
@@ -82,4 +83,35 @@ export interface SessionEntry {
   startTime: number;
   endTime?: number;
   device: string;
+}
+
+// --- BLACKJACK TYPES ---
+
+export interface Card {
+  suit: 'H' | 'D' | 'C' | 'S';
+  rank: string;
+  value: number;
+}
+
+export interface BlackjackState {
+  id: string;
+  deck: Card[];
+  player_hand: Card[];
+  dealer_hand: Card[];
+  player_score: number;
+  dealer_score: number;
+  status: 'active' | 'player_bust' | 'dealer_bust' | 'player_win' | 'dealer_win' | 'push';
+  wager: number;
+  currency: CurrencyType;
+  payout: number;
+}
+
+// --- SCRATCH TYPES ---
+export interface ScratchTicket {
+    grid: string[]; // 9 symbols
+    prize: number;
+    currency: CurrencyType;
+    isWin: boolean;
+    cost: number;
+    tier: 'jackpot' | 'high' | 'mid' | 'low' | 'loser';
 }
