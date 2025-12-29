@@ -42,19 +42,24 @@ const LiveTicker = () => {
 
 export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister, onGuestPlay }) => {
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filteredGames, setFilteredGames] = useState(GAMES_LIST);
 
   useEffect(() => {
-      if (selectedCategory === 'All') {
-          setFilteredGames(GAMES_LIST);
-      } else if (selectedCategory === 'Slots') {
-          setFilteredGames(GAMES_LIST.filter(g => !['Table', 'Instant', 'Original'].includes(g.tag || '') && !g.id.includes('plinko') && !g.id.includes('scratch') && !g.id.includes('blackjack') && !g.id.includes('poker')));
-      } else if (selectedCategory === 'Table') {
-          setFilteredGames(GAMES_LIST.filter(g => g.tag === 'Table' || g.id.includes('blackjack') || g.id.includes('poker')));
-      } else if (selectedCategory === 'Instant') {
-          setFilteredGames(GAMES_LIST.filter(g => g.tag === 'Instant' || g.tag === 'Original' || g.id.includes('plinko') || g.id.includes('scratch')));
+      let games = GAMES_LIST;
+
+      // 1. Filter by Category (Strict Mode)
+      if (selectedCategory !== 'All') {
+          games = games.filter(g => g.category === selectedCategory);
       }
-  }, [selectedCategory]);
+
+      // 2. Filter by Search
+      if (searchQuery) {
+          games = games.filter(g => g.title.toLowerCase().includes(searchQuery.toLowerCase()));
+      }
+
+      setFilteredGames(games);
+  }, [selectedCategory, searchQuery]);
 
   return (
     <div className="w-full min-h-full flex flex-col">
@@ -63,62 +68,74 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
 
         <div className="p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto flex-1 flex flex-col gap-8">
             
-            {/* Featured Hero */}
-            <div className="relative rounded-3xl overflow-hidden h-[500px] md:h-96 w-full group shadow-2xl ring-1 ring-white/10 flex flex-col md:flex-row">
-                {/* Dynamic Background */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 z-0"></div>
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-950 z-0 transition-transform duration-1000 transform group-hover:scale-105"></div>
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_0%,rgba(0,0,0,0.4)_100%)] z-0"></div>
+            {/* Featured Hero (Only show if not searching) */}
+            {!searchQuery && (
+                <div className="relative rounded-3xl overflow-hidden h-[500px] md:h-96 w-full group shadow-2xl ring-1 ring-white/10 flex flex-col md:flex-row">
+                    {/* Dynamic Background */}
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 z-0"></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-950 z-0 transition-transform duration-1000 transform group-hover:scale-105"></div>
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0)_0%,rgba(0,0,0,0.4)_100%)] z-0"></div>
 
-                <div className="relative h-full flex flex-col justify-center p-6 sm:p-10 md:p-16 z-10 max-w-3xl">
-                    <div className="inline-flex items-center gap-2 bg-yellow-500/20 border border-yellow-500/50 rounded-full px-3 py-1 w-fit mb-4 backdrop-blur-md">
-                        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-                        <span className="text-yellow-200 text-[10px] sm:text-xs font-bold uppercase tracking-wider">New Release</span>
-                    </div>
-                    
-                    {/* Responsive Text Sizing */}
-                    <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-100 to-indigo-300 mb-4 sm:mb-6 drop-shadow-xl font-display leading-tight">
-                        COSMIC <span className="text-indigo-400">CASH</span>
-                    </h1>
-                    
-                    <p className="text-sm sm:text-lg md:text-xl text-slate-300 mb-6 sm:mb-8 max-w-xl font-medium leading-relaxed">
-                        Explore the galaxy and uncover multipliers up to <span className="text-yellow-400 font-bold">x5,000</span>. The universe is full of rewards waiting to be claimed.
-                    </p>
-                    
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <button 
-                            onClick={() => onPlayGame(GAMES_LIST[0])}
-                            className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-slate-900 font-black py-3 sm:py-4 px-8 sm:px-10 rounded-full shadow-[0_0_30px_rgba(234,179,8,0.4)] transform hover:translate-y-[-2px] hover:shadow-[0_0_40px_rgba(234,179,8,0.6)] transition-all duration-300 flex items-center justify-center gap-2 text-sm sm:text-base"
-                        >
-                            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                            {isLoggedIn ? 'PLAY NOW' : 'TRY DEMO'}
-                        </button>
-                        {!isLoggedIn && (
+                    <div className="relative h-full flex flex-col justify-center p-6 sm:p-10 md:p-16 z-10 max-w-3xl">
+                        <div className="inline-flex items-center gap-2 bg-yellow-500/20 border border-yellow-500/50 rounded-full px-3 py-1 w-fit mb-4 backdrop-blur-md">
+                            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                            <span className="text-yellow-200 text-[10px] sm:text-xs font-bold uppercase tracking-wider">New Release</span>
+                        </div>
+                        
+                        <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-100 to-indigo-300 mb-4 sm:mb-6 drop-shadow-xl font-display leading-tight">
+                            COSMIC <span className="text-indigo-400">CASH</span>
+                        </h1>
+                        
+                        <p className="text-sm sm:text-lg md:text-xl text-slate-300 mb-6 sm:mb-8 max-w-xl font-medium leading-relaxed">
+                            Explore the galaxy and uncover multipliers up to <span className="text-yellow-400 font-bold">x5,000</span>. The universe is full of rewards waiting to be claimed.
+                        </p>
+                        
+                        <div className="flex flex-col sm:flex-row gap-4">
                             <button 
-                                onClick={onRegister}
-                                className="bg-slate-800/80 hover:bg-slate-700/80 text-white font-bold py-3 sm:py-4 px-8 sm:px-10 rounded-full border border-slate-600 backdrop-blur-md transition-all duration-300 text-sm sm:text-base"
+                                onClick={() => onPlayGame(GAMES_LIST.find(g => g.id === 'cosmic-cash') || GAMES_LIST[0])}
+                                className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-slate-900 font-black py-3 sm:py-4 px-8 sm:px-10 rounded-full shadow-[0_0_30px_rgba(234,179,8,0.4)] transform hover:translate-y-[-2px] hover:shadow-[0_0_40px_rgba(234,179,8,0.6)] transition-all duration-300 flex items-center justify-center gap-2 text-sm sm:text-base"
                             >
-                                CREATE ACCOUNT
+                                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                {isLoggedIn ? 'PLAY NOW' : 'TRY DEMO'}
                             </button>
-                        )}
+                            {!isLoggedIn && (
+                                <button 
+                                    onClick={onRegister}
+                                    className="bg-slate-800/80 hover:bg-slate-700/80 text-white font-bold py-3 sm:py-4 px-8 sm:px-10 rounded-full border border-slate-600 backdrop-blur-md transition-all duration-300 text-sm sm:text-base"
+                                >
+                                    CREATE ACCOUNT
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none hidden md:block"></div>
+                    <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-indigo-600/30 rounded-full blur-3xl pointer-events-none"></div>
                 </div>
+            )}
 
-                {/* Decorative Elements */}
-                <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none hidden md:block"></div>
-                <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-indigo-600/30 rounded-full blur-3xl pointer-events-none"></div>
-            </div>
-
-            {/* Game Grid */}
+            {/* Game Grid Controls */}
             <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 gap-4">
-                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-500/20 rounded-lg">
+                <div className="flex flex-col md:flex-row items-center justify-between border-b border-slate-800 pb-4 gap-4">
+                     <div className="flex items-center gap-3 w-full md:w-auto">
+                        <div className="p-2 bg-indigo-500/20 rounded-lg hidden sm:block">
                             <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                         </div>
-                        <h3 className="text-2xl font-bold text-white font-display tracking-tight">Lobby</h3>
+                        
+                        {/* Search Bar */}
+                        <div className="relative w-full md:w-64">
+                            <input 
+                                type="text" 
+                                placeholder="Search games..." 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-white focus:border-indigo-500 outline-none transition-colors"
+                            />
+                            <svg className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
                      </div>
-                     <div className="flex overflow-x-auto w-full sm:w-auto bg-slate-900 p-1 rounded-lg border border-slate-800 hide-scrollbar">
+
+                     <div className="flex overflow-x-auto w-full md:w-auto bg-slate-900 p-1 rounded-lg border border-slate-800 hide-scrollbar">
                         {['All', 'Slots', 'Table', 'Instant'].map(filter => (
                             <button 
                                 key={filter} 
@@ -133,7 +150,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
 
                 {filteredGames.length === 0 ? (
                     <div className="py-20 text-center text-slate-500">
-                        <p className="text-lg">No games found in this category.</p>
+                        <p className="text-lg">No games found.</p>
+                        {searchQuery && <button onClick={() => setSearchQuery('')} className="mt-2 text-indigo-400 text-sm hover:underline">Clear Search</button>}
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 animate-in fade-in duration-500">
@@ -149,9 +167,9 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
                                     {/* Icon / Placeholder Art */}
                                     <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-0">
                                         <div className="text-5xl mb-4 transform group-hover:scale-110 transition-transform duration-300 drop-shadow-md">
-                                            {game.id.includes('poker') ? '🃏' : game.id.includes('black') ? '♠️' : game.id.includes('plinko') ? '🟣' : game.id.includes('scratch') ? '🎟️' : '🎰'}
+                                            {game.id.includes('poker') ? '🃏' : game.id.includes('black') ? '♠️' : game.id.includes('plinko') ? '🟣' : game.id.includes('scratch') ? '🎟️' : game.id.includes('bingo') ? '🎱' : '🎰'}
                                         </div>
-                                        <h4 className="text-white font-black text-xl font-display leading-tight drop-shadow-md">{game.title}</h4>
+                                        <h4 className="text-white font-black text-xl font-display leading-tight drop-shadow-md line-clamp-2">{game.title}</h4>
                                     </div>
                                     
                                     {/* Tags */}

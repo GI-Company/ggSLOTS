@@ -44,12 +44,19 @@ export interface GameConfig {
   title: string;
   image: string;
   tag?: string;
+  category?: 'Slots' | 'Table' | 'Instant'; // Explicit Category for Lobby Filtering
   volatility: string;
   minWager: string;
   maxWager: string;
   maxMultiplier: string;
   isDemo?: boolean; // Controls if game is playable without login
   rules?: string; // Description for rules modal
+  // New Visual Props for Scalability
+  style?: {
+      background?: string; // CSS gradient or Image URL
+      accentColor?: string; // Hex code for borders/buttons
+      symbolSet?: string; // 'base', 'egypt', 'neon', etc.
+  }
 }
 
 export interface CoinPackage {

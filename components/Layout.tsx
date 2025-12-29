@@ -33,7 +33,11 @@ export const Layout: React.FC<LayoutProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleCurrencyToggle = () => { return; }; // SC Locked for now
+  const handleCurrencyToggle = () => { 
+      // Toggle logic
+      const next = currency === CurrencyType.GC ? CurrencyType.SC : CurrencyType.GC;
+      setCurrency(next);
+  };
 
   const NavItem = ({ view, label, icon }: { view: ViewType, label: string, icon: React.ReactNode }) => {
     const isActive = currentView === view;
@@ -66,16 +70,15 @@ export const Layout: React.FC<LayoutProps> = ({
 
   const CurrencyToggle = ({ className = "" }: { className?: string }) => (
     <div 
-        className={`relative inline-flex bg-slate-950 p-1 rounded-full border border-slate-700 shadow-inner group transition-colors cursor-not-allowed opacity-60 grayscale ${className}`}
+        className={`relative inline-flex bg-slate-950 p-1 rounded-full border border-slate-700 shadow-inner group transition-colors cursor-pointer ${className}`}
         onClick={handleCurrencyToggle}
-        title="Sweeps Cash (SC) Coming Soon!"
+        title={`Switch to ${currency === CurrencyType.GC ? 'Sweeps Cash' : 'Gold Coins'}`}
     >
-            <div className={`w-14 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-lg`}></div>
+            <div className={`w-14 h-8 rounded-full bg-gradient-to-br transition-all duration-300 shadow-lg ${currency === CurrencyType.GC ? 'from-yellow-400 to-yellow-600 translate-x-0' : 'from-green-400 to-green-600 translate-x-full'}`}></div>
             <div className="absolute inset-0 flex justify-between items-center px-2 text-[11px] font-black pointer-events-none select-none w-full box-border pr-3 pl-3">
-                <span className="z-10 text-slate-900">GC</span>
-                <span className="z-10 text-slate-500">SC</span>
+                <span className={`z-10 transition-colors ${currency === CurrencyType.GC ? 'text-slate-900' : 'text-slate-500'}`}>GC</span>
+                <span className={`z-10 transition-colors ${currency === CurrencyType.SC ? 'text-slate-900' : 'text-slate-500'}`}>SC</span>
             </div>
-            <div className="absolute -bottom-3 -right-2 bg-red-600 text-white text-[8px] px-1 rounded uppercase font-bold tracking-tighter shadow-sm">SOON</div>
     </div>
   );
 
@@ -148,7 +151,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <nav className="flex-1 p-3 overflow-y-auto hide-scrollbar space-y-6 mt-2">
                 <div className="space-y-1">
                     {(isMobile || !sidebarCollapsed) && <p className="px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Lobby</p>}
-                    <NavItem view="main" label="Lobby" icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} />
+                    <NavItem view="main" label="Lobby" icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} />
                     <NavItem view="promotions" label="Promotions" icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4H5z" /></svg>} />
                     <NavItem view="vip" label="VIP Club" icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>} />
                 </div>

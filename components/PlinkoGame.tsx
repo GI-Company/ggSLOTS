@@ -24,14 +24,17 @@ interface Trail {
 
 interface Ball {
   id: number;
-  path: number[];
-  currentStep: number;
-  progress: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  targetBucket: number; // The predetermined winning bucket
   finished: boolean;
   rotation: number;
   winAmount: number;
   multiplier: number;
   trails: Trail[];
+  radius: number;
 }
 
 interface ActivePeg {
@@ -49,13 +52,11 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
   const [pendingWins, setPendingWins] = useState(0);
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(null);
   
-  // UI State
   const [showRules, setShowRules] = useState(false);
-  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false); // Mobile Drawer State
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
 
   const visualBalance = balance - pendingWins - optimisticDebit;
 
-  // Theming Logic - Gradient definitions for balls
   const theme = useMemo(() => {
      if (game.id === 'plinko-x') return { 
          title: 'PLINKO X', 
@@ -103,11 +104,11 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
 
   const currentWager = WAGER_LEVELS[currency][wagerIndex];
 
-  // Canvas / Coordinate Logic
+  // Logic Coordinates (Percentages 0-100)
   const startX = 50; 
   const startY = 10; 
-  const rowHeight = 75 / rowCount; 
-  const colSpacing = 60 / rowCount;
+  const rowHeight = 80 / rowCount; // More vertical space usage
+  const colSpacing = 85 / rowCount; // Wider board for professional look
 
   const dropBall = async () => {
       if (visualBalance < currentWager) { alert("Insufficient funds"); return; }
@@ -120,19 +121,22 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
               const winAmount = winResult.totalWin;
               setOptimisticDebit(prev => prev - wagerForThisDrop);
               setPendingWins(prev => prev + winAmount);
+              
               const newBall: Ball = { 
                   id: ballIdCounter.current++, 
-                  path: outcome.path, 
-                  currentStep: 0, 
-                  progress: 0, 
+                  x: 50 + (Math.random() - 0.5) * 1, 
+                  y: 5, 
+                  vx: (Math.random() - 0.5) * 0.2, 
+                  vy: 0, 
+                  targetBucket: outcome.bucketIndex,
                   finished: false, 
                   rotation: Math.random() * 360, 
                   winAmount: winAmount, 
                   multiplier: outcome.multiplier,
-                  trails: [] 
+                  trails: [],
+                  radius: rowCount > 12 ? 0.8 : 1.2 
               };
               gameStateRef.current.balls.push(newBall);
-              gameStateRef.current.pegs.push({ r: 0, c: 0, opacity: 1.0 });
           }
       } catch (e) {
           console.error(e);
@@ -140,49 +144,166 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
       }
   };
 
+  const getPegCoordinates = (r: number, c: number) => {
+      const xOffset = (c - r / 2) * colSpacing;
+      return { x: startX + xOffset, y: startY + r * rowHeight };
+  };
+
+  // --- PHYSICS ENGINE ---
   const updatePhysics = (deltaTime: number) => {
       const state = gameStateRef.current;
-      const speed = (0.0035 * (12 / rowCount)) * deltaTime; 
+      const dt = Math.min(deltaTime, 20) * 0.05; // Time step
+      const gravity = 0.05;
+      const restitution = 0.5; // Bounciness
+      const bucketYThreshold = 85; // Percent down where buckets start
+      
       let ballsFinishedThisFrame: Ball[] = [];
 
+      // 1. Movement & Forces
       state.balls.forEach(ball => {
           if (ball.finished) return;
-          
-          // Current Position Logic for Trails
-          const r = ball.currentStep;
-          const c = ball.path.slice(0, ball.currentStep).reduce((a, b) => a + b, 0); 
-          const startPos = getCoordinates(r, c);
-          const nextDir = ball.path[ball.currentStep] || 0; 
-          const endPos = getCoordinates(r + 1, c + nextDir);
-          const p = ball.progress;
-          const cx = startPos.x + (endPos.x - startPos.x) * p;
-          const cy = startPos.y + (endPos.y - startPos.y) * (p * p) - Math.sin(p * Math.PI) * (20 / rowCount);
 
-          // Add Trail
-          if (Math.random() > 0.6) {
-              ball.trails.push({ x: cx, y: cy, opacity: 0.5 });
+          // Apply Gravity
+          ball.vy += gravity * dt;
+          
+          const inBucketZone = ball.y > bucketYThreshold;
+          
+          // Apply Guidance Force (Server Truth)
+          const targetX = getPegCoordinates(rowCount, ball.targetBucket).x;
+          
+          if (inBucketZone) {
+              // --- CAPTURE MODE (Anti-Bounce Out) ---
+              const dx = targetX - ball.x;
+              ball.vx += dx * 0.05 * dt; // Strong spring pull to center
+              ball.vx *= 0.85; // Heavy horizontal friction
+              
+              // CRITICAL FIX: Kill upward velocity if in bucket to prevent pop-outs
+              if (ball.vy < 0) ball.vy *= 0.1; 
+              
+          } else if (ball.y > 10) {
+              // --- GUIDANCE MODE (Mid-Air) ---
+              const dx = targetX - ball.x;
+              const progress = (ball.y - 10) / 75; 
+              const strength = 0.0005 + (progress * progress * 0.003); 
+              ball.vx += dx * strength * dt; 
           }
 
-          ball.progress += speed;
-          ball.rotation += 15 * deltaTime * (nextDir === 1 ? 1 : -1);
+          // Update Position
+          ball.x += ball.vx * dt;
+          ball.y += ball.vy * dt;
           
-          if (ball.progress >= 1) {
-              ball.progress = 0;
-              ball.currentStep++;
-              if (ball.currentStep >= rowCount) {
-                  ball.finished = true;
-                  ballsFinishedThisFrame.push(ball);
-              } else {
-                  const col = ball.path.slice(0, ball.currentStep).reduce((a, b) => a + b, 0);
-                  state.pegs.push({ r: ball.currentStep, c: col, opacity: 1.0 });
-              }
+          // Rotation
+          ball.rotation += ball.vx * 20 * dt;
+
+          // --- WALL BOUNDARIES (Hard Constraints) ---
+          const wallPadding = 2;
+          if (ball.x < wallPadding) { 
+              ball.x = wallPadding; 
+              ball.vx = Math.abs(ball.vx) * 0.5; // Bounce right
+          }
+          if (ball.x > 100 - wallPadding) { 
+              ball.x = 100 - wallPadding; 
+              ball.vx = -Math.abs(ball.vx) * 0.5; // Bounce left
           }
 
-          // Fade Trails
-          ball.trails.forEach(t => t.opacity -= 0.05);
+          // Finish Check
+          if (ball.y > 96) {
+              ball.finished = true;
+              ballsFinishedThisFrame.push(ball);
+          }
+
+          // Trail Generation
+          if (Math.random() > 0.7) {
+              ball.trails.push({ x: ball.x, y: ball.y, opacity: 0.5 });
+          }
+          ball.trails.forEach(t => t.opacity -= 0.03);
           ball.trails = ball.trails.filter(t => t.opacity > 0);
       });
 
+      // 2. Peg Collisions
+      state.balls.forEach(ball => {
+          if (ball.finished || ball.y > bucketYThreshold) return; // No peg collisions in bucket zone
+          const currentRow = Math.floor((ball.y - startY) / rowHeight);
+          
+          for (let r = Math.max(0, currentRow); r <= Math.min(rowCount, currentRow + 1); r++) {
+              for (let c = 0; c <= r; c++) {
+                  const peg = getPegCoordinates(r, c);
+                  const dx = ball.x - peg.x;
+                  const dy = ball.y - peg.y;
+                  const dist = Math.sqrt(dx*dx + dy*dy);
+                  const minDist = ball.radius + (rowCount > 12 ? 0.6 : 1.0); 
+
+                  if (dist < minDist) {
+                      const angle = Math.atan2(dy, dx);
+                      const overlap = minDist - dist;
+                      ball.x += Math.cos(angle) * overlap;
+                      ball.y += Math.sin(angle) * overlap;
+
+                      const speed = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+                      ball.vx = Math.cos(angle) * speed * restitution + (Math.random() - 0.5) * 0.1;
+                      ball.vy = Math.sin(angle) * speed * restitution;
+                      
+                      const existingPeg = state.pegs.find(p => p.r === r && p.c === c);
+                      if (!existingPeg) state.pegs.push({ r, c, opacity: 1.0 });
+                      else existingPeg.opacity = 1.0;
+                  }
+              }
+          }
+      });
+
+      // 3. BALL-TO-BALL COLLISIONS
+      for (let i = 0; i < state.balls.length; i++) {
+          for (let j = i + 1; j < state.balls.length; j++) {
+              const b1 = state.balls[i];
+              const b2 = state.balls[j];
+              
+              if (b1.finished || b2.finished) continue;
+
+              // Disable collisions if BOTH are in the bucket zone (prevents piling up and popping out)
+              if (b1.y > bucketYThreshold && b2.y > bucketYThreshold) continue;
+
+              const dx = b2.x - b1.x;
+              const dy = b2.y - b1.y;
+              const distSq = dx*dx + dy*dy;
+              const minDist = b1.radius + b2.radius; 
+
+              if (distSq < minDist * minDist) {
+                  const dist = Math.sqrt(distSq);
+                  const nx = dx / dist;
+                  const ny = dy / dist;
+                  const overlap = minDist - dist;
+                  
+                  // Push apart
+                  const pushX = nx * overlap * 0.5;
+                  const pushY = ny * overlap * 0.5;
+                  
+                  b1.x -= pushX; b1.y -= pushY;
+                  b2.x += pushX; b2.y += pushY;
+
+                  // Elastic Exchange
+                  const k = 0.85; 
+                  const chaos = (Math.random()-0.5) * 0.02;
+
+                  const tempVx = b1.vx;
+                  const tempVy = b1.vy;
+
+                  b1.vx = b2.vx * k + chaos;
+                  b1.vy = b2.vy * k;
+                  b2.vx = tempVx * k - chaos;
+                  b2.vy = tempVy * k;
+              }
+          }
+      }
+
+      // 4. Velocity Clamping
+      const MAX_SPEED = 1.5;
+      state.balls.forEach(ball => {
+          if (ball.vx > MAX_SPEED) ball.vx = MAX_SPEED;
+          if (ball.vx < -MAX_SPEED) ball.vx = -MAX_SPEED;
+          if (ball.vy > MAX_SPEED * 1.5) ball.vy = MAX_SPEED * 1.5;
+      });
+
+      // 5. Cleanup
       if (ballsFinishedThisFrame.length > 0) {
           let totalReleasedWin = 0;
           let latestWinInfo = null;
@@ -196,16 +317,16 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                setTimeout(() => setLastWin(null), 1500);
           }
       }
+      
       state.balls = state.balls.filter(b => !b.finished);
-      state.pegs.forEach(peg => { peg.opacity -= 0.05 * (deltaTime / 16); });
+      state.pegs.forEach(peg => { peg.opacity -= 0.05; });
       state.pegs = state.pegs.filter(p => p.opacity > 0);
   };
 
   const animate = (time: number) => {
     if (lastTimeRef.current !== undefined) {
       const deltaTime = time - lastTimeRef.current;
-      const clampedDelta = Math.min(deltaTime, 50); 
-      if (!isPaused) { updatePhysics(clampedDelta); setRenderState({ ...gameStateRef.current }); }
+      if (!isPaused) { updatePhysics(deltaTime); setRenderState({ ...gameStateRef.current }); }
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(animate);
@@ -216,16 +337,11 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
     return () => cancelAnimationFrame(requestRef.current!);
   }, [currentWager, isPaused, rowCount, riskLevel]); 
 
-  const getCoordinates = (r: number, c: number) => {
-      const xOffset = (c - r / 2) * colSpacing;
-      return { x: startX + xOffset, y: startY + r * rowHeight };
-  };
-
   const renderPegs = () => {
       const pegs = [];
       for (let r = 0; r <= rowCount; r++) {
           for (let c = 0; c <= r; c++) {
-              const { x, y } = getCoordinates(r, c);
+              const { x, y } = getPegCoordinates(r, c);
               const active = renderState.pegs.find(p => p.r === r && p.c === c);
               if (r < rowCount) {
                   const pegSize = rowCount > 12 ? 'w-1 h-1' : 'w-2 h-2';
@@ -242,7 +358,7 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
   };
 
   const renderBuckets = () => multipliers.map((mult, i) => {
-      const { x, y } = getCoordinates(rowCount, i);
+      const { x, y } = getPegCoordinates(rowCount, i);
       const center = rowCount / 2;
       const dist = Math.abs(i - center);
       const ratio = dist / (rowCount / 2);
@@ -357,21 +473,13 @@ export const PlinkoGame: React.FC<PlinkoGameProps> = ({ game, currency, balance,
                         </div>
 
                         {renderState.balls.map(ball => {
-                            const r = ball.currentStep;
-                            const c = ball.path.slice(0, ball.currentStep).reduce((a, b) => a + b, 0); 
-                            const startPos = getCoordinates(r, c);
-                            const nextDir = ball.path[ball.currentStep] || 0; 
-                            const endPos = getCoordinates(r + 1, c + nextDir);
-                            const p = ball.progress;
-                            const x = startPos.x + (endPos.x - startPos.x) * p;
-                            const y = startPos.y + (endPos.y - startPos.y) * (p * p) - Math.sin(p * Math.PI) * (20 / rowCount);
                             const ballSize = rowCount > 12 ? 'w-2 h-2' : 'w-3 h-3';
                             return (
                                 <React.Fragment key={ball.id}>
                                     {ball.trails.map((t, i) => (
                                         <div key={i} className={`absolute ${ballSize} rounded-full z-0`} style={{ left: `${t.x}%`, top: `${t.y}%`, transform: `translate(-50%, -50%)`, backgroundColor: theme.color.replace('text-', '').replace('500', '400'), opacity: t.opacity * 0.5 }}></div>
                                     ))}
-                                    <div className={`absolute ${ballSize} bg-gradient-to-br ${theme.ballGradient} rounded-full shadow-lg z-10 will-change-transform`} style={{ left: `${x}%`, top: `${y}%`, transform: `translate(-50%, -50%) rotate(${ball.rotation}deg)` }}>
+                                    <div className={`absolute ${ballSize} bg-gradient-to-br ${theme.ballGradient} rounded-full shadow-lg z-10 will-change-transform`} style={{ left: `${ball.x}%`, top: `${ball.y}%`, transform: `translate(-50%, -50%) rotate(${ball.rotation}deg)` }}>
                                         <div className="w-full h-full bg-white/30 rounded-full scale-50 ml-[1px] mt-[1px]"></div>
                                     </div>
                                 </React.Fragment>

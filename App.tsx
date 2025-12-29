@@ -240,9 +240,11 @@ const App: React.FC = () => {
         {legalModal === 'responsible' && <ResponsibleGamingModal onClose={() => setLegalModal(null)} />}
 
         {/* --- GAME ROUTES --- */}
+        {/* KEY PROP ADDED TO ALL GAMES TO FORCE RESET ON CURRENCY SWITCH */}
 
         {activeGame && activeGame.id.includes('plinko') && (
             <PlinkoGame 
+                key={`${activeGame.id}-${currency}`}
                 game={activeGame}
                 currency={currency}
                 balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
@@ -256,6 +258,7 @@ const App: React.FC = () => {
 
         {activeGame && activeGame.id === 'blackjack' && user && (
             <BlackjackGame 
+                key={`${activeGame.id}-${currency}`}
                 game={activeGame}
                 currency={currency}
                 balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
@@ -269,6 +272,7 @@ const App: React.FC = () => {
         
         {activeGame && activeGame.id === 'video-poker' && user && (
             <PokerGame
+                key={`${activeGame.id}-${currency}`}
                 game={activeGame}
                 currency={currency}
                 balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
@@ -281,6 +285,7 @@ const App: React.FC = () => {
         
         {activeGame && activeGame.id.includes('scratch') && user && (
              <ScratchGame
+                key={`${activeGame.id}-${currency}`}
                 game={activeGame}
                 user={user}
                 onClose={closeGame}
@@ -291,6 +296,7 @@ const App: React.FC = () => {
 
         {activeGame && !activeGame.id.includes('plinko') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && (
             <SlotGame 
+                key={`${activeGame.id}-${currency}`}
                 game={activeGame} 
                 currency={currency}
                 balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}

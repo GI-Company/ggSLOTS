@@ -41,6 +41,10 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   const gameAssets = GAME_DATA[game.id] || GAME_DATA['default'];
   const reelStrips = gameAssets.strips;
 
+  // Background style from config or fallback
+  const backgroundStyle = game.style?.background ? { backgroundImage: `url(${game.style.background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { backgroundColor: '#0f172a' };
+  const accentColor = game.style?.accentColor || '#6366f1';
+
   useEffect(() => {
     if (!spinning && !stopping && !winState && !isBonusActive) {
         setVisualBalance(balance);
@@ -142,7 +146,8 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300">
         {showRules && <GameRulesModal onClose={() => setShowRules(false)} gameTitle={game.title} />}
-        <div className={`relative w-full max-w-5xl aspect-[4/5] sm:aspect-[4/3] md:aspect-[16/9] bg-slate-900 rounded-3xl border-4 shadow-2xl flex flex-col overflow-hidden transition-colors duration-500 ${isBonusActive ? 'border-yellow-500 shadow-yellow-500/20' : 'border-indigo-500/50'}`}>
+        
+        <div className={`relative w-full max-w-5xl aspect-[4/5] sm:aspect-[4/3] md:aspect-[16/9] bg-slate-900 rounded-3xl border-4 shadow-2xl flex flex-col overflow-hidden transition-colors duration-500 ${isBonusActive ? 'border-yellow-500 shadow-yellow-500/20' : ''}`} style={{ borderColor: isBonusActive ? '#eab308' : accentColor }}>
             {isBonusActive && <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-red-500 to-yellow-500 animate-shimmer z-30"></div>}
             
             {/* DEMO / GUEST BANNER */}
@@ -154,7 +159,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
 
             {isPaused && <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center"><h2 className="text-3xl font-bold text-white font-display">GAME PAUSED</h2></div>}
 
-            <div className="flex-none h-16 bg-slate-800/80 border-b border-indigo-500/30 flex justify-between items-center px-6 z-20 backdrop-blur-md">
+            <div className="flex-none h-16 bg-slate-950/80 border-b flex justify-between items-center px-6 z-20 backdrop-blur-md" style={{ borderColor: `${accentColor}30` }}>
                 <div className="flex items-center gap-2">
                     <button onClick={onClose} disabled={spinning || isBonusActive} className="p-2 hover:bg-slate-700 rounded-full transition-colors disabled:opacity-50">
                         <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -166,16 +171,28 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
                 <div className="flex gap-4 text-sm font-bold"><div className="bg-slate-950 px-4 py-2 rounded-lg border border-slate-700 shadow-inner"><span className="text-slate-500 mr-2">BAL</span><span className="text-white tabular-nums">{currency === 'GC' ? Math.floor(visualBalance).toLocaleString() : visualBalance.toFixed(2)}</span></div></div>
             </div>
 
-            <div className={`flex-1 relative p-4 sm:p-8 flex items-center justify-center gap-2 sm:gap-4 overflow-hidden bg-black`}>
+            <div className={`flex-1 relative p-4 sm:p-8 flex items-center justify-center gap-2 sm:gap-4 overflow-hidden bg-black`} style={backgroundStyle}>
+                <div className="absolute inset-0 bg-black/40 z-0 pointer-events-none"></div>
                 <div className="absolute top-1/2 left-0 w-full h-1 bg-yellow-400/20 pointer-events-none z-0"></div>
-                {winState && <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/70 animate-in fade-in zoom-in duration-300 pointer-events-none"><h1 className="text-6xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)] animate-bounce font-display mb-2 text-center leading-none">{winState.text}</h1><div className="text-4xl sm:text-5xl font-bold text-white drop-shadow-md">{currency === 'GC' ? Math.floor(winState.amount).toLocaleString() : winState.amount.toFixed(2)}</div></div>}
-                {reelStrips.map((strip, i) => (<div key={i} className={`flex-1 h-full max-w-[200px] relative bg-slate-900 rounded-lg overflow-hidden transition-all duration-300 ${isBonusActive ? 'border border-yellow-500/30 shadow-[inset_0_0_20px_rgba(234,179,8,0.1)]' : ''}`}><SlotReel symbols={strip} targetIndex={targetIndices[i]} isSpinning={spinning && !stopping} reelIndex={i} quickSpin={isQuickSpin || isBonusActive}/></div>))}
+                
+                {winState && (
+                    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/70 animate-in fade-in zoom-in duration-300 pointer-events-none">
+                        <h1 className="text-6xl sm:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)] animate-bounce font-display mb-2 text-center leading-none">{winState.text}</h1>
+                        <div className="text-4xl sm:text-5xl font-bold text-white drop-shadow-md">{currency === 'GC' ? Math.floor(winState.amount).toLocaleString() : winState.amount.toFixed(2)}</div>
+                    </div>
+                )}
+                
+                {reelStrips.map((strip, i) => (
+                    <div key={i} className={`flex-1 h-full max-w-[200px] relative bg-slate-950/80 rounded-lg overflow-hidden transition-all duration-300 z-10 ${isBonusActive ? 'border border-yellow-500/30 shadow-[inset_0_0_20px_rgba(234,179,8,0.1)]' : ''}`}>
+                        <SlotReel symbols={strip} targetIndex={targetIndices[i]} isSpinning={spinning && !stopping} reelIndex={i} quickSpin={isQuickSpin || isBonusActive}/>
+                    </div>
+                ))}
             </div>
 
-            <div className="flex-none h-24 bg-slate-800/90 backdrop-blur-md border-t border-indigo-500/30 flex items-center justify-between px-4 sm:px-8 gap-4 z-20">
+            <div className="flex-none h-24 bg-slate-900/90 backdrop-blur-md border-t flex items-center justify-between px-4 sm:px-8 gap-4 z-20" style={{ borderColor: `${accentColor}30` }}>
                 <div className="flex flex-col items-center">
                     <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Bet</div>
-                    <div className={`flex items-center bg-slate-900 rounded-lg border border-slate-700 p-1 shadow-inner ${isBonusActive ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                    <div className={`flex items-center bg-slate-950 rounded-lg border border-slate-700 p-1 shadow-inner ${isBonusActive ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
                         <button disabled={spinning || wagerIndex === 0} onClick={() => setWagerIndex(i => i - 1)} className="w-10 h-8 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50 text-white font-bold transition-colors">-</button>
                         <div className="w-24 text-center font-bold text-white tabular-nums">{currency === 'GC' ? currentWager.toLocaleString() : currentWager.toFixed(2)}</div>
                         <button disabled={spinning || wagerIndex === WAGER_LEVELS[currency].length - 1} onClick={() => setWagerIndex(i => i + 1)} className="w-10 h-8 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50 text-white font-bold transition-colors">+</button>

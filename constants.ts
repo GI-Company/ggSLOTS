@@ -1,4 +1,6 @@
 
+import { GameConfig } from './types';
+
 export const REEL_COUNT = 3;
 
 // 5 Paylines: Top, Middle, Bottom, Diagonal TL-BR, Diagonal BL-TR
@@ -46,7 +48,6 @@ const HORROR_SYMBOLS = ['🕯️', '⚰️', '🕷️', '🕸️', '🧛', '🧟
 const JUNGLE_SYMBOLS = ['🌿', '🐍', '🦜', '🐵', '🐯', '🗿', '🏝️', 'SCATTER'];
 const OCEAN_SYMBOLS = ['🐚', '🦀', '🐠', '🐙', '🦈', '🧜‍♀️', '🔱', 'SCATTER'];
 const ZEUS_SYMBOLS = ['🏺', '🛡️', '⚔️', '🏛️', '⚡', '🦅', 'ZEUS', 'SCATTER'];
-// New Sets
 const NEON_SYMBOLS = ['A', 'B', 'C', '7', 'BAR', 'BELL', 'DIAMOND', 'SCATTER'];
 const ASIAN_SYMBOLS = ['🎋', '🏮', '💴', '🧧', '🐢', '🐼', 'DRAGON', 'SCATTER'];
 const AZTEC_SYMBOLS = ['🌽', '🗿', '🐆', '🦅', '👺', '🔥', 'TEMPLE', 'SCATTER'];
@@ -98,93 +99,105 @@ const generatePayouts = (symbols: string[], volatility: 'Low' | 'Medium' | 'High
     };
 };
 
-// FULLY MAPPED GAME DATA
-export const GAME_DATA: Record<string, GameData> = {
-    // Existing
+// Initial Mapped Game Data
+const BASE_GAME_DATA: Record<string, GameData> = {
     'cosmic-cash': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') },
-    'pyramid-riches': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
-    'viking-victory': { strips: generateStrips(['RUNE1', 'RUNE2', 'RUNE3', 'HELMET', 'SHIELD', 'AXE', 'ODIN', 'SCATTER'], 'Medium'), payouts: generatePayouts(['RUNE1', 'RUNE2', 'RUNE3', 'HELMET', 'SHIELD', 'AXE', 'ODIN', 'SCATTER'], 'Medium') },
-    'ocean-fortune': { strips: generateStrips(OCEAN_SYMBOLS, 'Low'), payouts: generatePayouts(OCEAN_SYMBOLS, 'Low') },
-    'dragon-hoard': { strips: generateStrips(ASIAN_SYMBOLS, 'High'), payouts: generatePayouts(ASIAN_SYMBOLS, 'High') },
-
-    // New Mappings
-    'neon-nights': { strips: generateStrips(NEON_SYMBOLS, 'High'), payouts: generatePayouts(NEON_SYMBOLS, 'High') },
-    'buffalo-stampede': { strips: generateStrips(WILD_SYMBOLS, 'High'), payouts: generatePayouts(WILD_SYMBOLS, 'High') },
-    'fruit-frenzy': { strips: generateStrips(FRUIT_SYMBOLS, 'Low'), payouts: generatePayouts(FRUIT_SYMBOLS, 'Low') },
-    'jokers-jewels': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') },
-    'wolf-run': { strips: generateStrips(JUNGLE_SYMBOLS, 'Medium'), payouts: generatePayouts(JUNGLE_SYMBOLS, 'Medium') },
-    'cleos-gold': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
-    'zeus-thunder': { strips: generateStrips(ZEUS_SYMBOLS, 'High'), payouts: generatePayouts(ZEUS_SYMBOLS, 'High') },
-    '777-deluxe': { strips: generateStrips(BASE_SYMBOLS, 'Low'), payouts: generatePayouts(BASE_SYMBOLS, 'Low') },
-    'panda-fortune': { strips: generateStrips(ASIAN_SYMBOLS, 'Medium'), payouts: generatePayouts(ASIAN_SYMBOLS, 'Medium') },
-    'chilli-heat': { strips: generateStrips(CHILLI_SYMBOLS, 'Medium'), payouts: generatePayouts(CHILLI_SYMBOLS, 'Medium') },
-    'sweet-bonanza': { strips: generateStrips(CANDY_SYMBOLS, 'High'), payouts: generatePayouts(CANDY_SYMBOLS, 'High') },
-    'dead-or-alive': { strips: generateStrips(WILD_SYMBOLS, 'High'), payouts: generatePayouts(WILD_SYMBOLS, 'High') },
-    'starburst-xx': { strips: generateStrips(BASE_SYMBOLS, 'Low'), payouts: generatePayouts(BASE_SYMBOLS, 'Low') },
-    'gonzos-quest': { strips: generateStrips(AZTEC_SYMBOLS, 'Medium'), payouts: generatePayouts(AZTEC_SYMBOLS, 'Medium') },
-    'book-of-dead': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
-    'rise-of-olympus': { strips: generateStrips(ZEUS_SYMBOLS, 'High'), payouts: generatePayouts(ZEUS_SYMBOLS, 'High') },
-    'fire-joker': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') },
-    'legacy-of-dead': { strips: generateStrips(EGYPT_SYMBOLS, 'High'), payouts: generatePayouts(EGYPT_SYMBOLS, 'High') },
-    'mustang-gold': { strips: generateStrips(WILD_SYMBOLS, 'Medium'), payouts: generatePayouts(WILD_SYMBOLS, 'Medium') },
-    'the-dog-house': { strips: generateStrips(DOG_SYMBOLS, 'High'), payouts: generatePayouts(DOG_SYMBOLS, 'High') },
-    'underwater-gold': { strips: generateStrips(OCEAN_SYMBOLS, 'Medium'), payouts: generatePayouts(OCEAN_SYMBOLS, 'Medium') },
-    'halloween-fortune': { strips: generateStrips(HORROR_SYMBOLS, 'Medium'), payouts: generatePayouts(HORROR_SYMBOLS, 'Medium') },
-    
-    // Default fallback
     'default': { strips: generateStrips(BASE_SYMBOLS, 'Medium'), payouts: generatePayouts(BASE_SYMBOLS, 'Medium') }
 };
 
-export const GAMES_LIST = [
+// Initial List with Categories
+const INITIAL_GAMES_LIST: GameConfig[] = [
   // --- TABLE GAMES ---
-  { id: 'blackjack', title: 'Cosmic Blackjack', image: '', tag: 'Table', volatility: 'Low', minWager: '100 GC', maxWager: '500k GC', maxMultiplier: 'x2.5', isDemo: true },
-  { id: 'video-poker', title: 'Jacks or Better', image: '', tag: 'Table', volatility: 'Medium', minWager: '100 GC', maxWager: '50k GC', maxMultiplier: 'x800', isDemo: true },
+  { id: 'blackjack', title: 'Cosmic Blackjack', image: '', tag: 'Table', category: 'Table', volatility: 'Low', minWager: '100 GC', maxWager: '500k GC', maxMultiplier: 'x2.5', isDemo: true },
+  { id: 'video-poker', title: 'Jacks or Better', image: '', tag: 'Table', category: 'Table', volatility: 'Medium', minWager: '100 GC', maxWager: '50k GC', maxMultiplier: 'x800', isDemo: true },
   
-  // --- PLINKO ---
-  { id: 'plinko', title: 'Plinko Classic', image: '', tag: 'Original', volatility: 'Variable', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x1,000', isDemo: true },
-  { id: 'plinko-x', title: 'Plinko X', image: '', tag: 'High Risk', volatility: 'High', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x10,000', isDemo: true },
-  { id: 'plinko-party', title: 'Plinko Party', image: '', tag: 'Fun', volatility: 'Low', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x500', isDemo: true },
-  
-  // --- SCRATCHERS ---
-  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '', tag: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: '1 SC', maxMultiplier: 'x2,000', isDemo: true },
-  { id: 'scratch-777', title: 'Lucky 7s', image: '', tag: 'Instant', volatility: 'High', minWager: '1k GC', maxWager: '5 SC', maxMultiplier: 'x5,000', isDemo: true },
-  { id: 'scratch-gold', title: 'Gold Rush', image: '', tag: 'Instant', volatility: 'Medium', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x1,000', isDemo: true },
-  { id: 'scratch-neon', title: 'Neon Scratch', image: '', tag: 'Instant', volatility: 'Low', minWager: '200 GC', maxWager: '1 SC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'scratch-zombie', title: 'Zombie Scratch', image: '', tag: 'Instant', volatility: 'High', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x10,000', isDemo: true },
-  { id: 'scratch-diamond', title: 'Diamond Dreams', image: '', tag: 'Instant', volatility: 'Very High', minWager: '2k GC', maxWager: '10 SC', maxMultiplier: 'x20,000', isDemo: true },
+  // --- INSTANT GAMES ---
+  { id: 'bingo-blast', title: 'Bingo Blast', image: '', tag: 'Instant', category: 'Instant', volatility: 'Low', minWager: '500 GC', maxWager: '50k GC', maxMultiplier: 'x1,000', isDemo: true },
+  { id: 'plinko', title: 'Plinko Classic', image: '', tag: 'Original', category: 'Instant', volatility: 'Variable', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x1,000', isDemo: true },
+  { id: 'plinko-x', title: 'Plinko X', image: '', tag: 'High Risk', category: 'Instant', volatility: 'High', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x10,000', isDemo: true },
+  { id: 'plinko-party', title: 'Plinko Party', image: '', tag: 'Fun', category: 'Instant', volatility: 'Low', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x500', isDemo: true },
+  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: '1 SC', maxMultiplier: 'x2,000', isDemo: true },
+  { id: 'scratch-777', title: 'Lucky 7s', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '1k GC', maxWager: '5 SC', maxMultiplier: 'x5,000', isDemo: true },
+  { id: 'scratch-gold', title: 'Gold Rush', image: '', tag: 'Instant', category: 'Instant', volatility: 'Medium', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x1,000', isDemo: true },
+  { id: 'scratch-neon', title: 'Neon Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Low', minWager: '200 GC', maxWager: '1 SC', maxMultiplier: 'x500', isDemo: true },
+  { id: 'scratch-zombie', title: 'Zombie Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x10,000', isDemo: true },
+  { id: 'scratch-diamond', title: 'Diamond Dreams', image: '', tag: 'Instant', category: 'Instant', volatility: 'Very High', minWager: '2k GC', maxWager: '10 SC', maxMultiplier: 'x20,000', isDemo: true },
 
-  // --- SLOTS (EXISTING) ---
-  { id: 'cosmic-cash', title: 'Cosmic Cash', image: '', tag: 'Popular', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,200', isDemo: true },
-  { id: 'pyramid-riches', title: 'Pyramid Riches', image: '', tag: 'Hot', volatility: 'High', minWager: '200 GC', maxWager: '2M GC', maxMultiplier: 'x2,500', isDemo: false },
-  { id: 'viking-victory', title: 'Viking Victory', image: '', tag: '', volatility: 'Medium', minWager: '50 GC', maxWager: '500k GC', maxMultiplier: 'x800', isDemo: false },
-  { id: 'ocean-fortune', title: 'Ocean\'s Fortune', image: '', tag: 'Jackpot', volatility: 'Low', minWager: '100 GC', maxWager: '1.5M GC', maxMultiplier: 'x500', isDemo: false },
-  { id: 'dragon-hoard', title: 'Dragon\'s Hoard', image: '', tag: 'Hot', volatility: 'Very High', minWager: '1k GC', maxWager: '10M GC', maxMultiplier: 'x5,000', isDemo: false },
-
-  // --- SLOTS (NEW) ---
-  { id: 'neon-nights', title: 'Neon Nights', image: '', tag: 'New', volatility: 'High', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x5,000', isDemo: true },
-  { id: 'buffalo-stampede', title: 'Buffalo Stampede', image: '', tag: 'Trending', volatility: 'High', minWager: '200 GC', maxWager: '200k GC', maxMultiplier: 'x4,000', isDemo: false },
-  { id: 'fruit-frenzy', title: 'Fruit Frenzy', image: '', tag: 'Classic', volatility: 'Low', minWager: '50 GC', maxWager: '50k GC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'jokers-jewels', title: 'Joker\'s Jewels', image: '', tag: 'Classic', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,000', isDemo: false },
-  { id: 'wolf-run', title: 'Wolf Run', image: '', tag: 'Nature', volatility: 'Medium', minWager: '100 GC', maxWager: '150k GC', maxMultiplier: 'x2,000', isDemo: false },
-  { id: 'cleos-gold', title: 'Cleo\'s Gold', image: '', tag: 'Egypt', volatility: 'High', minWager: '200 GC', maxWager: '500k GC', maxMultiplier: 'x3,000', isDemo: false },
-  { id: 'zeus-thunder', title: 'Zeus Thunder', image: '', tag: 'Gods', volatility: 'High', minWager: '500 GC', maxWager: '1M GC', maxMultiplier: 'x5,000', isDemo: false },
-  { id: '777-deluxe', title: '777 Deluxe', image: '', tag: 'Classic', volatility: 'Low', minWager: '100 GC', maxWager: '50k GC', maxMultiplier: 'x800', isDemo: true },
-  { id: 'panda-fortune', title: 'Panda Fortune', image: '', tag: 'Asian', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,500', isDemo: false },
-  { id: 'chilli-heat', title: 'Chilli Heat', image: '', tag: 'Spicy', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x2,500', isDemo: false },
-  { id: 'sweet-bonanza', title: 'Sweet Bonanza', image: '', tag: 'Candy', volatility: 'High', minWager: '200 GC', maxWager: '200k GC', maxMultiplier: 'x21,000', isDemo: false },
-  { id: 'dead-or-alive', title: 'Dead or Alive', image: '', tag: 'Wild West', volatility: 'High', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x10,000', isDemo: false },
-  { id: 'starburst-xx', title: 'Starburst XX', image: '', tag: 'Space', volatility: 'Low', minWager: '50 GC', maxWager: '50k GC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'gonzos-quest', title: 'Gonzo\'s Quest', image: '', tag: 'Adventure', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x2,500', isDemo: false },
-  { id: 'book-of-dead', title: 'Book of Dead', image: '', tag: 'Egypt', volatility: 'High', minWager: '200 GC', maxWager: '500k GC', maxMultiplier: 'x5,000', isDemo: false },
-  { id: 'rise-of-olympus', title: 'Rise of Olympus', image: '', tag: 'Gods', volatility: 'High', minWager: '200 GC', maxWager: '500k GC', maxMultiplier: 'x5,000', isDemo: false },
-  { id: 'fire-joker', title: 'Fire Joker', image: '', tag: 'Classic', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x800', isDemo: false },
-  { id: 'legacy-of-dead', title: 'Legacy of Dead', image: '', tag: 'Egypt', volatility: 'High', minWager: '200 GC', maxWager: '500k GC', maxMultiplier: 'x5,000', isDemo: false },
-  { id: 'mustang-gold', title: 'Mustang Gold', image: '', tag: 'Nature', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x2,000', isDemo: false },
-  { id: 'the-dog-house', title: 'The Dog House', image: '', tag: 'Cute', volatility: 'High', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x6,750', isDemo: false },
-  { id: 'underwater-gold', title: 'Underwater Gold', image: '', tag: 'Ocean', volatility: 'Medium', minWager: '100 GC', maxWager: '200k GC', maxMultiplier: 'x1,000', isDemo: false },
-  { id: 'halloween-fortune', title: 'Halloween Fortune', image: '', tag: 'Spooky', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,000', isDemo: false }
+  // --- SLOTS ---
+  { id: 'cosmic-cash', title: 'Cosmic Cash', image: '', tag: 'Popular', category: 'Slots', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,200', isDemo: true, style: { background: 'linear-gradient(to bottom, #1e1b4b, #312e81, #0f172a)', accentColor: '#6366f1' } },
+  { id: 'pyramid-riches', title: 'Pyramid Riches', image: '', tag: 'Hot', category: 'Slots', volatility: 'High', minWager: '200 GC', maxWager: '2M GC', maxMultiplier: 'x2,500', isDemo: false, style: { background: 'linear-gradient(to bottom, #451a03, #78350f, #0f172a)', accentColor: '#f59e0b' } },
+  { id: 'viking-victory', title: 'Viking Victory', image: '', tag: '', category: 'Slots', volatility: 'Medium', minWager: '50 GC', maxWager: '500k GC', maxMultiplier: 'x800', isDemo: false, style: { background: 'linear-gradient(to bottom, #1e293b, #334155, #020617)', accentColor: '#94a3b8' } },
 ];
 
-// Export current strips for the component to use
+// --- PROCEDURAL GENERATION ENGINE ---
+const generateGames = () => {
+    const adjectives = ['Golden', 'Mystic', 'Super', 'Mega', 'Royal', 'Wild', 'Cyber', 'Neon', 'Ancient', 'Lucky', 'Epic', 'Magic', 'Turbo', 'Shadow', 'Solar'];
+    const nouns = ['Fortune', 'Dragon', 'Joker', 'Fruits', 'Quest', 'Kingdom', 'Empire', 'Legends', 'Bonanza', 'Riches', 'Diamond', 'Storm', 'Thunder', 'Wolf', 'Tiger'];
+    const themes = [
+        { id: 'egypt', symbols: EGYPT_SYMBOLS, bg: ['#451a03', '#78350f'] },
+        { id: 'wild', symbols: WILD_SYMBOLS, bg: ['#422006', '#713f12'] },
+        { id: 'candy', symbols: CANDY_SYMBOLS, bg: ['#f9a8d4', '#ec4899'] },
+        { id: 'fruit', symbols: FRUIT_SYMBOLS, bg: ['#be123c', '#e11d48'] },
+        { id: 'horror', symbols: HORROR_SYMBOLS, bg: ['#312e81', '#1e1b4b'] },
+        { id: 'jungle', symbols: JUNGLE_SYMBOLS, bg: ['#14532d', '#166534'] },
+        { id: 'ocean', symbols: OCEAN_SYMBOLS, bg: ['#0c4a6e', '#0284c7'] },
+        { id: 'zeus', symbols: ZEUS_SYMBOLS, bg: ['#1e3a8a', '#2563eb'] },
+        { id: 'neon', symbols: NEON_SYMBOLS, bg: ['#2e1065', '#7e22ce'] },
+        { id: 'asian', symbols: ASIAN_SYMBOLS, bg: ['#7f1d1d', '#b91c1c'] },
+        { id: 'aztec', symbols: AZTEC_SYMBOLS, bg: ['#78350f', '#d97706'] },
+        { id: 'dog', symbols: DOG_SYMBOLS, bg: ['#065f46', '#10b981'] },
+        { id: 'chilli', symbols: CHILLI_SYMBOLS, bg: ['#991b1b', '#ef4444'] }
+    ];
+
+    const newGames: GameConfig[] = [];
+    const newGameData: Record<string, GameData> = {};
+
+    // Generate 50 Unique Slots
+    for (let i = 0; i < 50; i++) {
+        const theme = themes[Math.floor(Math.random() * themes.length)];
+        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+        const title = `${adj} ${noun}`;
+        const id = title.toLowerCase().replace(' ', '-');
+        
+        // Volatility Randomizer
+        const vol = Math.random() > 0.6 ? 'High' : (Math.random() > 0.3 ? 'Medium' : 'Low');
+        const maxMult = vol === 'High' ? 'x5,000' : (vol === 'Medium' ? 'x2,000' : 'x800');
+
+        // Config
+        newGames.push({
+            id,
+            title,
+            image: '',
+            tag: i % 7 === 0 ? 'New' : (i % 5 === 0 ? 'Hot' : undefined),
+            category: 'Slots',
+            volatility: vol,
+            minWager: '100 GC',
+            maxWager: '100k GC',
+            maxMultiplier: maxMult,
+            isDemo: Math.random() > 0.5, // 50% are unlocked for guest
+            style: {
+                background: `linear-gradient(to bottom, ${theme.bg[0]}, ${theme.bg[1]}, #020617)`,
+                accentColor: theme.bg[1],
+                symbolSet: theme.id
+            }
+        });
+
+        // Data
+        newGameData[id] = {
+            strips: generateStrips(theme.symbols, vol as any),
+            payouts: generatePayouts(theme.symbols, vol as any)
+        };
+    }
+
+    return { newGames, newGameData };
+};
+
+const generated = generateGames();
+
+export const GAMES_LIST = [...INITIAL_GAMES_LIST, ...generated.newGames];
+export const GAME_DATA = { ...BASE_GAME_DATA, ...generated.newGameData };
+
+// Export current strips for the component to use (default fallback)
 export const REEL_STRIPS = GAME_DATA['cosmic-cash'].strips; 
 export const PAYOUTS = GAME_DATA['cosmic-cash'].payouts;
