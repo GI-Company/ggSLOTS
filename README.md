@@ -30,7 +30,7 @@ The application is architected to handle 1,000+ concurrent users without data in
 ```mermaid
 graph TD
     User[User Client] -->|1. Auth JWT| Auth[Supabase Auth]
-    User -->|2. Game Action (RPC)| API[Postgres RPC Interface]
+    User -->|2. Game Action RPC| API[Postgres RPC Interface]
     
     subgraph Core [Trusted Core - PostgreSQL 15]
         API -->|Lock Row| Wallets[(Profiles Table)]
@@ -39,7 +39,7 @@ graph TD
         Logic -->|Update Balance| Wallets
     end
     
-    Wallets -->|3. Emit Event (WAL)| Realtime[Supabase Realtime]
+    Wallets -->|3. Emit Event WAL| Realtime[Supabase Realtime]
     Realtime -->|4. Push Balance Update| User
     
     User -->|5. Crypto Payment| NOW[NOWPayments Widget]
