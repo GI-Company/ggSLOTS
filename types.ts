@@ -57,7 +57,11 @@ export interface CoinPackage {
   gcAmount: number;
   scAmount: number;
   isBestValue: boolean;
-  widgetId?: string; // NOWPayments Widget ID
+}
+
+export interface CreatePaymentResponse {
+  invoice_url: string;
+  payment_id: string;
 }
 
 export interface WinResult {

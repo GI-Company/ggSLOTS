@@ -86,7 +86,7 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
           dealSequence();
       }
       else if (turn === 'botLeft') {
-          timerRef.current = setTimeout(() => {
+          timerRef.current = window.setTimeout(() => {
               let currentHand = [...botLeft.hand];
               let score = calculateBotScore(currentHand);
               
@@ -107,7 +107,7 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
           // Wait for user input
       }
       else if (turn === 'botRight') {
-          timerRef.current = setTimeout(() => {
+          timerRef.current = window.setTimeout(() => {
               let currentHand = [...botRight.hand];
               let score = calculateBotScore(currentHand);
               

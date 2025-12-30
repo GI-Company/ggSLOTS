@@ -33,11 +33,15 @@ const getVar = (base: string) => {
            getEnvVar(base); // Direct access
 };
 
-const supabaseUrl = getVar('SUPABASE_URL');
-const supabaseAnonKey = getVar('SUPABASE_ANON_KEY');
+// Use provided URL as default if env var is missing
+const supabaseUrl = getVar('SUPABASE_URL') || 'https://sorqdvmpehxjfstunzgo.supabase.co';
+
+// Check for standard Anon Key, or the specific SUPABASE_KEY from the snippet
+const supabaseAnonKey = getVar('SUPABASE_ANON_KEY') || getVar('SUPABASE_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("CRITICAL: Supabase credentials missing. Check .env file.");
+    console.warn("Supabase Key missing. App may not function correctly without valid credentials.");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create client with the resolved URL and Key
+export const supabase = createClient(supabaseUrl, supabaseAnonKey || '');

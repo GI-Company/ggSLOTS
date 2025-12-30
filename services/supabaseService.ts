@@ -40,12 +40,19 @@ const UserProfileSchema = z.object({
 
 const WinResultSchema = z.object({
     totalWin: z.number(),
+    winningLines: z.array(z.object({
+        lineIndex: z.number(),
+        symbol: z.string(),
+        amount: z.number()
+    })),
     isBigWin: z.boolean(),
     freeSpinsWon: z.number(),
-    bonusText: z.string().optional().nullable(),
+    bonusText: z.string(),
     stopIndices: z.array(z.number()),
     plinkoOutcome: z.any().optional(),
-    scratchOutcome: z.any().optional()
+    scratchOutcome: z.any().optional(),
+    rngSeed: z.string().optional(),
+    serverHash: z.string().optional()
 });
 
 const validateData = <T>(schema: z.ZodSchema<T>, data: any, context: string): T => {

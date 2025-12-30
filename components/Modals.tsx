@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MIN_REDEMPTION, REDEMPTION_UNLOCK_PRICE, COIN_PACKAGES } from '../constants';
 import { UserProfile, GameHistoryEntry, KycStatus, CoinPackage } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import { paymentService } from '../services/paymentService';
 import toast from 'react-hot-toast';
 
 // --- Shared Modal Wrapper ---
@@ -189,18 +190,32 @@ export const HistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 // --- Get Coins Store ---
 export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | null; onRegister: () => void }> = ({ onClose, user, onRegister }) => {
     const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
-    const [step, setStep] = useState<'select' | 'crypto_widget'>('select');
+    const [step, setStep] = useState<'select' | 'payment_pending'>('select');
+    const [isLoading, setIsLoading] = useState(false);
+    const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
     
     const isGuest = !user || user.isGuest;
 
-    const handleSelectPkg = (pkg: CoinPackage) => { 
+    const handleSelectPkg = async (pkg: CoinPackage) => { 
         if (isGuest) {
             toast('Purchasing requires a verified account.', { icon: '🔒', duration: 4000 });
             onRegister();
             return;
         }
-        setSelectedPkg(pkg); 
-        setStep('crypto_widget'); 
+        
+        setSelectedPkg(pkg);
+        setIsLoading(true);
+        try {
+            // Call our new secure payment service that triggers the Edge Function
+            const response = await paymentService.createInvoice(pkg.id, pkg.price);
+            setInvoiceUrl(response.invoice_url);
+            setStep('payment_pending');
+        } catch (e: any) {
+            toast.error(e.message || "Failed to initiate payment");
+            setStep('select');
+        } finally {
+            setIsLoading(false);
+        }
     };
     
     return (
@@ -209,11 +224,12 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
                  <div className="grid gap-4">
                     {COIN_PACKAGES.map((pkg, i) => (
                         <div key={i} 
-                             onClick={() => handleSelectPkg(pkg)}
+                             onClick={() => !isLoading && handleSelectPkg(pkg)}
                              className={`
                                 group relative overflow-hidden bg-slate-800/50 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]
                                 flex items-center p-4
                                 ${pkg.isBestValue ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.1)]' : 'border-slate-700 hover:border-slate-500'}
+                                ${isLoading ? 'opacity-50 cursor-wait' : ''}
                              `}
                         >
                              {pkg.isBestValue && (
@@ -248,6 +264,8 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                         LOGIN
                                      </>
+                                 ) : isLoading && selectedPkg?.id === pkg.id ? (
+                                     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                  ) : (
                                      `$${pkg.price}`
                                  )}
@@ -257,11 +275,11 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
                  </div>
             )}
 
-            {step === 'crypto_widget' && selectedPkg && (
+            {step === 'payment_pending' && selectedPkg && invoiceUrl && (
                 <div className="flex flex-col items-center animate-in slide-in-from-right duration-300 h-full">
                     {/* Header Summary for Checkout */}
                     <div className="bg-slate-800/50 p-4 rounded-xl text-center border border-slate-700 w-full mb-4">
-                        <div className="text-slate-400 text-xs uppercase font-bold mb-1">Package</div>
+                        <div className="text-slate-400 text-xs uppercase font-bold mb-1">Secure Checkout</div>
                         <div className="inline-block bg-slate-900/80 px-4 py-1.5 rounded-full border border-slate-700 text-sm">
                             <span className="text-yellow-500 font-bold">{selectedPkg.gcAmount.toLocaleString()} GC</span>
                             <span className="mx-2 text-slate-600">|</span>
@@ -269,38 +287,27 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
                         </div>
                     </div>
 
-                    {/* Fake Browser Bar for Widget */}
-                    <div className="w-full bg-slate-800 rounded-t-xl p-2 flex items-center gap-2 border border-slate-700 border-b-0">
-                        <div className="flex gap-1.5 ml-2">
-                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                        </div>
-                        <div className="flex-1 bg-slate-900 rounded px-3 py-1 text-[10px] text-slate-500 text-center font-mono flex items-center justify-center gap-1">
-                            <svg className="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                            nowpayments.io
-                        </div>
-                    </div>
-                    
-                    <div className="w-full flex-1 bg-slate-950 border border-slate-800 relative shadow-inner overflow-hidden" style={{ minHeight: '400px' }}>
+                    {/* NOWPayments Invoice IFrame */}
+                    <div className="w-full flex-1 bg-slate-950 border border-slate-800 relative shadow-inner overflow-hidden rounded-xl" style={{ minHeight: '500px' }}>
                          <iframe 
-                            src={`https://nowpayments.io/embeds/payment-widget?iid=${selectedPkg.widgetId}`}
+                            src={invoiceUrl}
                             width="100%" 
                             height="100%" 
                             frameBorder="0" 
                             className="absolute inset-0"
+                            allow="payment"
                         >
-                            Loading Payment Gateway...
+                            Loading Secure Payment Gateway...
                         </iframe>
                     </div>
 
                     <div className="mt-4 w-full">
                         <div className="bg-indigo-900/20 border border-indigo-500/30 p-3 rounded-lg flex gap-3 items-start mb-4">
-                            <svg className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <svg className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                             <p className="text-xs text-indigo-200/80 leading-relaxed">
-                                Please complete your secure payment in the widget above. 
+                                Complete your payment in the secure window above. Supported cryptocurrencies include BTC, ETH, USDT, TRX and more.
                                 <br/><br/>
-                                <strong>Note:</strong> Your account balance will update automatically once the transaction is confirmed on the blockchain (usually 2-5 minutes).
+                                <strong>Note:</strong> Your account balance will update automatically once the transaction is confirmed on the blockchain (usually 2-10 minutes).
                             </p>
                         </div>
 
