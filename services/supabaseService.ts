@@ -379,17 +379,6 @@ export const supabaseService = {
       }
   },
   db: {
-    checkPaymentStatus: async (packageId: string): Promise<{ status: 'completed' | 'pending' | 'failed', txHash?: string, explorerUrl?: string }> => {
-        if (!supabase) throw new Error("No client");
-        const { data, error } = await supabase.rpc('check_transaction_status', { package_id: packageId });
-        if (error) throw error;
-        
-        return { 
-            status: data?.status || 'pending',
-            txHash: data?.tx_hash,
-            explorerUrl: data?.explorer_url
-        };
-    },
     purchasePackage: async (price: number, gcAmount: number, scAmount: number): Promise<UserProfile> => {
         if (!supabase) throw new Error("No client");
         const { error } = await supabase.rpc('purchase_package', { price, gc_amount: gcAmount, sc_amount: scAmount });

@@ -107,14 +107,6 @@ const App: React.FC = () => {
     toast.success("Logged out successfully");
   };
 
-  const handlePurchase = async (pkg: any) => { 
-      if(!user) return;
-      // Simulate successful payment
-      const updatedUser = await supabaseService.db.purchasePackage(pkg.price, pkg.gcAmount, pkg.scAmount);
-      setUser(updatedUser);
-      toast.success(`Purchased ${pkg.gcAmount.toLocaleString()} GC + ${pkg.scAmount} SC!`);
-  };
-
   const handleRedeem = async (amount: number) => {
     if (!user || user.isGuest) return;
     const updatedUser = await supabaseService.db.redeem(amount);
@@ -145,7 +137,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (currentView === 'sweeps-rules') return <SweepstakesRulesModal onClose={() => setCurrentView('main')} />;
     if (currentView === 'history') return <HistoryModal onClose={() => setCurrentView('main')} />;
-    if (currentView === 'get-coins') return <GetCoinsModal onClose={() => setCurrentView('main')} onPurchase={handlePurchase} />;
+    if (currentView === 'get-coins') return <GetCoinsModal onClose={() => setCurrentView('main')} />;
     
     if (currentView === 'redeem') {
         if (!user || user.isGuest) return <div className="p-8 text-center text-white">Please login to redeem.</div>;
