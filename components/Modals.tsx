@@ -189,26 +189,52 @@ export const HistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 // --- Get Coins Store ---
 export const GetCoinsModal: React.FC<{ onClose: () => void; onPurchase: (pkg: any) => void }> = ({ onClose, onPurchase }) => {
     const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
-    const [step, setStep] = useState<'select' | 'method' | 'crypto_widget'>('select');
+    const [step, setStep] = useState<'select' | 'crypto_widget' | 'success'>('select');
     
-    const handleSelectPkg = (pkg: CoinPackage) => { setSelectedPkg(pkg); setStep('method'); };
-    
-    const handleCardPay = async () => { if(!selectedPkg) return; await onPurchase(selectedPkg); onClose(); };
+    // Payment Verification State
+    const [verifying, setVerifying] = useState(false);
+    const [paymentError, setPaymentError] = useState<string | null>(null);
+    const [successData, setSuccessData] = useState<{txHash: string, explorerUrl: string} | null>(null);
 
-    const handleCryptoSelection = () => {
-        setStep('crypto_widget');
+    const handleSelectPkg = (pkg: CoinPackage) => { 
+        setSelectedPkg(pkg); 
+        setStep('crypto_widget'); 
+    };
+    
+    const handlePaymentCheck = async () => {
+        if (!selectedPkg) return;
+        setVerifying(true);
+        setPaymentError(null);
+        
+        try {
+            const result = await supabaseService.db.checkPaymentStatus(selectedPkg.id);
+            
+            if (result.status === 'completed') {
+                await onPurchase(selectedPkg);
+                setVerifying(false);
+                setSuccessData({
+                    txHash: result.txHash || 'N/A',
+                    explorerUrl: result.explorerUrl || '#'
+                });
+                setStep('success');
+                toast.success("Transaction Verified!");
+            } else {
+                setVerifying(false);
+                setPaymentError("Transaction not yet confirmed on blockchain. This may take a few minutes.");
+            }
+        } catch (e) {
+            setVerifying(false);
+            setPaymentError("Connection error checking payment. Please try again.");
+        }
     };
 
-    const handlePaymentComplete = async () => {
-        if (!selectedPkg) return;
-        // In a real app, this would be a webhook callback. 
-        // For the widget integration showcase, we simulate the callback success.
-        await onPurchase(selectedPkg);
-        onClose();
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.success("Copied to clipboard");
     };
 
     return (
-        <Modal onClose={onClose} title={step === 'select' ? "Coin Store" : step === 'method' ? "Secure Checkout" : "Crypto Payment"}>
+        <Modal onClose={onClose} title={step === 'select' ? "Coin Store" : step === 'success' ? "Payment Successful" : "Secure Crypto Payment"}>
             {step === 'select' && (
                  <div className="grid gap-4">
                     {COIN_PACKAGES.map((pkg, i) => (
@@ -249,84 +275,140 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; onPurchase: (pkg: an
                  </div>
             )}
 
-            {step === 'method' && (
-                <div className="space-y-6 animate-in slide-in-from-right duration-300">
-                    <div className="bg-slate-800/50 p-6 rounded-2xl text-center border border-slate-700 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent"></div>
-                        <div className="text-slate-400 text-xs uppercase font-bold mb-1">Total Due</div>
-                        <div className="text-4xl font-black text-white mb-2">${selectedPkg?.price}</div>
-                        <div className="inline-block bg-slate-900/80 px-4 py-1.5 rounded-full border border-slate-700 text-sm">
-                            <span className="text-yellow-500 font-bold">{selectedPkg?.gcAmount.toLocaleString()} GC</span>
-                            <span className="mx-2 text-slate-600">|</span>
-                            <span className="text-green-500 font-bold">{selectedPkg?.scAmount} SC</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <button onClick={handleCardPay} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white p-4 rounded-xl flex items-center justify-between group shadow-lg shadow-indigo-900/20">
-                             <div className="flex items-center gap-3">
-                                 <div className="w-6 h-6 rounded-full border-2 border-white/30 group-hover:border-white transition-colors"></div>
-                                 <span className="font-bold">Credit / Debit Card</span>
-                             </div>
-                             <div className="flex gap-1 opacity-60">
-                                <div className="w-8 h-5 bg-white rounded"></div>
-                                <div className="w-8 h-5 bg-white rounded"></div>
-                             </div>
-                        </button>
-                        
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                             <div className="flex items-center gap-2 mb-4">
-                                <span className="text-xl">₿</span>
-                                <span className="font-bold text-white">Cryptocurrency</span>
-                             </div>
-                             
-                             <p className="text-xs text-slate-400 mb-4">Pay securely using BTC, ETH, USDT, and 50+ other cryptocurrencies via NOWPayments.</p>
-
-                             <button 
-                                onClick={handleCryptoSelection}
-                                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
-                             >
-                                 Pay with Crypto
-                             </button>
-                        </div>
-                    </div>
-
-                    <button onClick={() => setStep('select')} className="w-full text-slate-500 text-sm hover:text-white py-2">Cancel & Back</button>
-                </div>
-            )}
-
             {step === 'crypto_widget' && selectedPkg && (
-                <div className="flex flex-col items-center animate-in slide-in-from-right duration-300">
-                    <div className="w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-800 relative shadow-inner" style={{ height: '600px' }}>
+                <div className="flex flex-col items-center animate-in slide-in-from-right duration-300 h-full">
+                    {/* Header Summary for Checkout */}
+                    <div className="bg-slate-800/50 p-4 rounded-xl text-center border border-slate-700 w-full mb-4">
+                        <div className="text-slate-400 text-xs uppercase font-bold mb-1">Package</div>
+                        <div className="inline-block bg-slate-900/80 px-4 py-1.5 rounded-full border border-slate-700 text-sm">
+                            <span className="text-yellow-500 font-bold">{selectedPkg.gcAmount.toLocaleString()} GC</span>
+                            <span className="mx-2 text-slate-600">|</span>
+                            <span className="text-green-500 font-bold">{selectedPkg.scAmount} SC</span>
+                        </div>
+                    </div>
+
+                    {/* Fake Browser Bar for Widget */}
+                    <div className="w-full bg-slate-800 rounded-t-xl p-2 flex items-center gap-2 border border-slate-700 border-b-0">
+                        <div className="flex gap-1.5 ml-2">
+                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
+                        <div className="flex-1 bg-slate-900 rounded px-3 py-1 text-[10px] text-slate-500 text-center font-mono flex items-center justify-center gap-1">
+                            <svg className="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                            nowpayments.io
+                        </div>
+                    </div>
+                    
+                    <div className="w-full flex-1 bg-slate-950 border border-slate-800 relative shadow-inner overflow-hidden" style={{ minHeight: '400px' }}>
                          <iframe 
                             src={`https://nowpayments.io/embeds/payment-widget?iid=${selectedPkg.widgetId}`}
                             width="100%" 
                             height="100%" 
                             frameBorder="0" 
-                            scrolling="no" 
-                            style={{ overflowY: 'hidden' }}
+                            className="absolute inset-0"
                         >
                             Loading Payment Gateway...
                         </iframe>
+                        
+                        {/* Overlay when verifying */}
+                        {verifying && (
+                            <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
+                                <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-6"></div>
+                                <h3 className="text-xl font-bold text-white mb-2">Verifying Transaction...</h3>
+                                <p className="text-slate-400 text-sm max-w-xs">Please wait while we confirm your payment with the blockchain network.</p>
+                            </div>
+                        )}
                     </div>
+
                     <div className="mt-4 w-full">
-                         <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg flex gap-3 items-start mb-4">
-                            <svg className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <p className="text-xs text-yellow-200/80 leading-relaxed">
-                                Complete the payment in the widget above. Once the transaction is broadcasted, click the button below to update your balance.
-                            </p>
+                         {!verifying ? (
+                             <>
+                                {paymentError ? (
+                                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex gap-3 items-start mb-4">
+                                        <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <div className="text-left">
+                                            <p className="text-xs text-red-200/90 font-bold mb-1">Status: Pending</p>
+                                            <p className="text-xs text-red-200/70 leading-relaxed">
+                                                {paymentError}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg flex gap-3 items-start mb-4">
+                                        <svg className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <p className="text-xs text-yellow-200/80 leading-relaxed">
+                                            Once payment is complete in the widget above, click the button below to confirm.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <button 
+                                    onClick={handlePaymentCheck}
+                                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg transition-colors mb-2 flex items-center justify-center gap-2"
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    {paymentError ? 'Check Status Again' : 'Check Payment Status'}
+                                </button>
+                                <button onClick={() => setStep('select')} className="w-full text-slate-500 text-sm hover:text-white py-2">
+                                    Cancel
+                                </button>
+                             </>
+                         ) : (
+                             <div className="text-center text-xs text-slate-500 animate-pulse">Do not close this window...</div>
+                         )}
+                    </div>
+                </div>
+            )}
+
+            {step === 'success' && successData && (
+                <div className="flex flex-col items-center justify-center py-6 animate-in zoom-in-95 duration-500">
+                    <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(34,197,94,0.4)]">
+                        <svg className="w-12 h-12 text-white animate-in zoom-in duration-500 delay-150" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    
+                    <h2 className="text-3xl font-black text-white font-display mb-2">Payment Confirmed</h2>
+                    <p className="text-slate-400 text-sm mb-8">Your account has been credited.</p>
+
+                    <div className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-4 mb-6">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-xs text-slate-500 font-bold uppercase">Blockchain Proof</span>
+                            <div className="bg-green-500/10 border border-green-500/30 px-2 py-0.5 rounded text-[10px] text-green-400 uppercase font-bold">
+                                Confirmed
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 bg-slate-900 rounded p-2 border border-slate-800 mb-3 group">
+                            <code className="text-xs text-slate-300 font-mono truncate flex-1 opacity-80">
+                                {successData.txHash}
+                            </code>
+                            <button 
+                                onClick={() => copyToClipboard(successData.txHash)}
+                                className="p-1.5 hover:bg-slate-800 rounded text-slate-500 hover:text-white transition-colors"
+                                title="Copy Hash"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            </button>
                         </div>
 
-                         <button 
-                            onClick={handlePaymentComplete}
-                            className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg transition-colors mb-2"
+                        <a 
+                            href={successData.explorerUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="block w-full text-center text-xs font-bold text-indigo-400 hover:text-indigo-300 hover:underline"
                         >
-                            I have completed the payment
-                        </button>
-                         <button onClick={() => setStep('select')} className="w-full text-slate-500 text-sm hover:text-white py-2">
-                            Cancel
-                        </button>
+                            View on Block Explorer &rarr;
+                        </a>
                     </div>
+
+                    <button 
+                        onClick={onClose}
+                        className="w-full bg-white hover:bg-slate-200 text-black font-bold py-4 rounded-xl shadow-lg transition-colors"
+                    >
+                        Continue Playing
+                    </button>
                 </div>
             )}
         </Modal>

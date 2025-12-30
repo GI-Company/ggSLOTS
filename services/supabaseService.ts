@@ -385,6 +385,30 @@ export const supabaseService = {
       draw: async (gameId: string, held: number[], user: UserProfile) => { /* ... */ return { game: {} as PokerState, user }; }
   },
   db: {
+    checkPaymentStatus: async (packageId: string): Promise<{ status: 'completed' | 'pending' | 'failed', txHash?: string, explorerUrl?: string }> => {
+        if (supabase) {
+            try {
+               const { data } = await supabase.rpc('check_transaction_status', { package_id: packageId });
+               return { 
+                   status: data?.status || 'pending',
+                   txHash: data?.tx_hash,
+                   explorerUrl: data?.explorer_url
+               };
+            } catch(e) { return { status: 'pending' }; }
+        }
+        // Mock Backend Check
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Mock Success Data
+        const mockTxHash = "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+        const mockExplorer = `https://etherscan.io/tx/${mockTxHash}`;
+        
+        return { 
+            status: 'completed', 
+            txHash: mockTxHash,
+            explorerUrl: mockExplorer
+        };
+    },
     purchasePackage: async (price: number, gcAmount: number, scAmount: number): Promise<UserProfile> => {
         if (supabase) {
             try {
@@ -397,7 +421,7 @@ export const supabaseService = {
                 }
             } catch(e) {}
         }
-        await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+        await new Promise(resolve => setTimeout(resolve, 100)); // Instant update after 'check' passed
         const stored = localStorage.getItem(STORAGE_KEY); if (!stored) throw new Error("No session"); const user = JSON.parse(stored) as UserProfile;
         user.gcBalance += gcAmount; user.scBalance += scAmount; if (price >= REDEMPTION_UNLOCK_PRICE) user.hasUnlockedRedemption = true;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); return user;
