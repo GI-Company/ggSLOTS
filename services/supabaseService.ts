@@ -154,17 +154,21 @@ export const supabaseService = {
         throw new Error("Failed to create guest session.");
     },
     signIn: async (email: string, password?: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
-      if (!supabase) throw new Error("Supabase Client not initialized.");
+      if (!supabase) return { data: null, error: "Supabase client not initialized" };
 
       try {
         if (profileData && password) {
             // REGISTER
+            // We strip any fields that might cause trigger issues if sent raw, though specific handling is in the trigger.
             const { data, error } = await supabase.auth.signUp({ email, password, options: { data: profileData } });
-            if (error) throw error;
+            
+            if (error) {
+                console.error("Signup Error:", error);
+                return { data: null, error: error.message };
+            }
             
             if (data.user) {
                  // Wait for database trigger to create profile
-                 // Retry logic could be added here for robustness
                  let retries = 3;
                  while (retries > 0) {
                      await new Promise(r => setTimeout(r, 1000)); 
@@ -172,22 +176,26 @@ export const supabaseService = {
                      if (profile) return { data: validateData(UserProfileSchema, profile, 'AuthRegister') as UserProfile, error: null, message: "Welcome!" };
                      retries--;
                  }
-                 throw new Error("Profile creation timed out. Please contact support.");
+                 // If profile creation fails, it's likely a DB trigger error that didn't roll back the auth user creation, 
+                 // or the fetch failed.
+                 return { data: null, error: "Profile creation timed out. Please check database logs." };
             }
         } else if (password) {
             // LOGIN
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) throw error;
+            if (error) return { data: null, error: error.message };
             
             if (data.user) {
                 const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-                if (profileError) throw profileError;
+                if (profileError) return { data: null, error: "Failed to load user profile." };
                 return { data: validateData(UserProfileSchema, profile, 'AuthLogin') as UserProfile, error: null, message: "Welcome back!" };
             }
         }
         return { data: null, error: "Authentication failed" };
       } catch (e: any) { 
-          throw e; // Propagate error to UI
+          // Catch unexpected errors (like network issues) and return them as string
+          console.error("Auth Exception:", e);
+          return { data: null, error: e.message || "An unexpected error occurred." };
       }
     },
     resetPassword: async (email: string) => { 
@@ -204,7 +212,7 @@ export const supabaseService = {
             const { data: { session } } = await supabase.auth.getSession(); 
             if (session) { 
                 const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single(); 
-                return validateData(UserProfileSchema, data, 'SessionCheck') as UserProfile; 
+                if (data) return validateData(UserProfileSchema, data, 'SessionCheck') as UserProfile; 
             } 
         } catch (e) { return null; }
         return null;
