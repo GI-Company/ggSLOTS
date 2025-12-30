@@ -1,8 +1,4 @@
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 html, body, #root {
   height: 100%;
   width: 100%;
@@ -47,7 +43,10 @@ html, body, #root {
 }
 
 .glass-panel {
-  @apply bg-slate-900/80 backdrop-blur-md border border-slate-700/50 shadow-xl;
+  background-color: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 .text-glow {
