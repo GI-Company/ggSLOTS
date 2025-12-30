@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, Suspense } from 'react';
 import { UserProfile, CurrencyType, ViewType, GameConfig, WinResult } from './types';
 import { supabaseService } from './services/supabaseService';
@@ -29,7 +28,7 @@ const GameLoader = () => (
     </div>
 );
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [currency, setCurrency] = useState<CurrencyType>(CurrencyType.GC);
   const [currentView, setCurrentView] = useState<ViewType>('main');
@@ -137,7 +136,16 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (currentView === 'sweeps-rules') return <SweepstakesRulesModal onClose={() => setCurrentView('main')} />;
     if (currentView === 'history') return <HistoryModal onClose={() => setCurrentView('main')} />;
-    if (currentView === 'get-coins') return <GetCoinsModal onClose={() => setCurrentView('main')} />;
+    
+    if (currentView === 'get-coins') {
+        return (
+            <GetCoinsModal 
+                onClose={() => setCurrentView('main')} 
+                user={user}
+                onRegister={() => setAuthModalType('register')}
+            />
+        );
+    }
     
     if (currentView === 'redeem') {
         if (!user || user.isGuest) return <div className="p-8 text-center text-white">Please login to redeem.</div>;
@@ -264,89 +272,4 @@ const App: React.FC = () => {
             {/* --- GAME ROUTES --- */}
             <Suspense fallback={<GameLoader />}>
                 <ErrorBoundary componentName={activeGame?.title} onReset={closeGame}>
-                    {activeGame && activeGame.id.includes('plinko') && (
-                        <PlinkoGame 
-                            key={`${activeGame.id}-${currency}`}
-                            game={activeGame}
-                            currency={currency}
-                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
-                            user={user}
-                            onClose={closeGame}
-                            onSpin={(wager, isFreeSpin, config) => handleGameSpin(wager, isFreeSpin, config)}
-                            isPaused={!sidebarCollapsed}
-                            onVisualBalanceChange={setVisualBalanceOverride}
-                        />
-                    )}
-
-                    {activeGame && activeGame.id.includes('bingo') && (
-                        <BingoGame
-                            key={`${activeGame.id}-${currency}`}
-                            game={activeGame}
-                            currency={currency}
-                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
-                            user={user}
-                            onClose={closeGame}
-                            onSpin={(wager, isFreeSpin) => handleGameSpin(wager, isFreeSpin)}
-                            isPaused={!sidebarCollapsed}
-                            onVisualBalanceChange={setVisualBalanceOverride}
-                        />
-                    )}
-
-                    {activeGame && activeGame.id === 'blackjack' && user && (
-                        <BlackjackGame 
-                            key={`${activeGame.id}-${currency}`}
-                            game={activeGame}
-                            currency={currency}
-                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
-                            user={user}
-                            onClose={closeGame}
-                            onUpdateUser={setUser}
-                            isPaused={!sidebarCollapsed}
-                            onVisualBalanceChange={setVisualBalanceOverride}
-                        />
-                    )}
-                    
-                    {activeGame && activeGame.id === 'video-poker' && user && (
-                        <PokerGame
-                            key={`${activeGame.id}-${currency}`}
-                            game={activeGame}
-                            currency={currency}
-                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
-                            user={user}
-                            onClose={closeGame}
-                            onUpdateUser={setUser}
-                            isPaused={!sidebarCollapsed}
-                        />
-                    )}
-                    
-                    {activeGame && activeGame.id.includes('scratch') && user && (
-                        <ScratchGame
-                            key={`${activeGame.id}-${currency}`}
-                            game={activeGame}
-                            user={user}
-                            onClose={closeGame}
-                            onUpdateUser={setUser}
-                            isPaused={!sidebarCollapsed}
-                        />
-                    )}
-
-                    {activeGame && !activeGame.id.includes('plinko') && !activeGame.id.includes('bingo') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && (
-                        <SlotGame 
-                            key={`${activeGame.id}-${currency}`}
-                            game={activeGame} 
-                            currency={currency}
-                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
-                            user={user}
-                            onClose={closeGame}
-                            onSpin={handleGameSpin}
-                            isPaused={!sidebarCollapsed}
-                        />
-                    )}
-                </ErrorBoundary>
-            </Suspense>
-        </Layout>
-    </>
-  );
-};
-
-export default App;
+                    {activeGame && activeGame.

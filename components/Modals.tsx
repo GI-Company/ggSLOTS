@@ -187,11 +187,18 @@ export const HistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 };
 
 // --- Get Coins Store ---
-export const GetCoinsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | null; onRegister: () => void }> = ({ onClose, user, onRegister }) => {
     const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
     const [step, setStep] = useState<'select' | 'crypto_widget'>('select');
     
+    const isGuest = !user || user.isGuest;
+
     const handleSelectPkg = (pkg: CoinPackage) => { 
+        if (isGuest) {
+            toast('Purchasing requires a verified account.', { icon: '🔒', duration: 4000 });
+            onRegister();
+            return;
+        }
         setSelectedPkg(pkg); 
         setStep('crypto_widget'); 
     };
@@ -230,8 +237,20 @@ export const GetCoinsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                                  )}
                              </div>
                              
-                             <button className="bg-slate-700 group-hover:bg-indigo-600 text-white font-bold py-2 px-5 rounded-xl transition-colors min-w-[80px]">
-                                 ${pkg.price}
+                             <button className={`
+                                 min-w-[100px] py-2 px-3 rounded-xl transition-colors font-bold flex items-center justify-center gap-2
+                                 ${isGuest 
+                                    ? 'bg-slate-900 border border-slate-600 text-slate-400 text-xs' 
+                                    : 'bg-slate-700 group-hover:bg-indigo-600 text-white'}
+                             `}>
+                                 {isGuest ? (
+                                     <>
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                        LOGIN
+                                     </>
+                                 ) : (
+                                     `$${pkg.price}`
+                                 )}
                              </button>
                         </div>
                     ))}
