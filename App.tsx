@@ -67,8 +67,8 @@ const App: React.FC = () => {
   // Realtime Subscription for Profile Updates
   useEffect(() => {
     if (user && !user.isGuest) {
-        const unsubscribe = supabaseService.auth.subscribeToUserChanges(user.id, (updatedProfile) => {
-            setUser(prev => prev ? { ...prev, ...updatedProfile } : updatedProfile);
+        const unsubscribe = supabaseService.auth.subscribeToUserChanges(user.id, (updatedProfile: UserProfile) => {
+            setUser((prev: UserProfile | null) => prev ? { ...prev, ...updatedProfile } : updatedProfile);
         });
         return () => unsubscribe();
     }

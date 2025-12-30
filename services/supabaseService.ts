@@ -5,16 +5,12 @@ import { supabase } from '../lib/supabaseClient';
 import { complianceService } from './complianceService';
 import { z } from 'zod';
 
-const MOCK_DELAY = 300;
-const STORAGE_KEY = 'ggslots_user_session';
-const GUEST_STORAGE_KEY = 'ggslots_guest_session';
-const DEMO_TENANT_ID = 'demo_tenant_1';
-
 // --- ZOD SCHEMAS (Runtime Validation) ---
 
 const UserProfileSchema = z.object({
     id: z.string(),
-    email: z.string().email().optional().or(z.literal('Guest Player')),
+    // Email is required in UserProfile interface, so we enforce it here.
+    email: z.string().or(z.literal('Guest Player')),
     gcBalance: z.number().min(0),
     scBalance: z.number().min(0),
     vipLevel: z.string(),
@@ -44,9 +40,10 @@ const validateData = <T>(schema: z.ZodSchema<T>, data: any, context: string): T 
     }
 };
 
-// --- HELPER FUNCTIONS ---
-
-const generateIdempotencyKey = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
+// --- CLIENT-SIDE PREDICTION HELPERS ---
+// Used to generate optimistic UI state or payload for the server
+// NOTE: In a strict server-authoritative model, these might move entirely to PL/pgSQL.
+// For this architecture, we send the "proposed" outcome to the server for validation/logging (Audit Trail).
 
 const getPlinkoMultipliers = (rows: number, risk: 'Low' | 'Medium' | 'High'): number[] => {
     const multipliers: number[] = [];
@@ -138,308 +135,239 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
     };
 };
 
-const generateDeck = (): Card[] => {
-    const suits: ('H' | 'D' | 'C' | 'S')[] = ['H', 'D', 'C', 'S'];
-    const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-    const deck: Card[] = [];
-    for(const s of suits) {
-        for(const r of ranks) {
-            let value = parseInt(r);
-            if(['J','Q','K'].includes(r)) value = 10;
-            if(r === 'A') value = 11;
-            deck.push({ suit: s, rank: r, value });
-        }
-    }
-    for (let i = deck.length - 1; i > 0; i--) {
-        const j = complianceService.getRandomInt(0, i);
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-    return deck;
-};
-
-const calculateHandScore = (hand: Card[]): number => {
-    let score = 0;
-    let aces = 0;
-    hand.forEach(c => { score += c.value; if(c.rank === 'A') aces++; });
-    while(score > 21 && aces > 0) { score -= 10; aces--; }
-    return score;
-};
-
-const mapDBGameToState = (data: any): BlackjackState => {
-    return {
-        id: data.id,
-        deck: data.deck || [], 
-        player_hand: data.player_hand || [],
-        dealer_hand: data.dealer_hand || [],
-        player_score: data.player_score,
-        dealer_score: data.dealer_score,
-        status: data.stage === 'settled' ? 
-            (data.player_score > 21 ? 'player_bust' : 
-            data.dealer_score > 21 ? 'dealer_bust' : 
-            data.player_score > data.dealer_score ? 'player_win' : 
-            data.player_score < data.dealer_score ? 'dealer_win' : 'push') : data.stage,
-        wager: data.wager_amount,
-        currency: data.currency as CurrencyType,
-        payout: 0 
-    };
-};
-
-const MOCK_GAMES_STORE: Record<string, BlackjackState> = {};
-const MOCK_POKER_STORE: Record<string, PokerState> = {};
-
 export const supabaseService = {
   auth: {
       signInAsGuest: async (): Promise<{ user: UserProfile, message?: string }> => {
-        if (supabase) {
-            try {
-                const { data, error } = await supabase.auth.signInAnonymously();
-                if (!error && data.session) {
-                    await new Promise(r => setTimeout(r, 1000));
-                    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.session.user.id).single();
-                    if (profile) return { user: validateData(UserProfileSchema, { ...profile, isGuest: true }, 'AuthGuest'), message: "Welcome Guest!" };
-                }
-            } catch (e) { console.warn("Supabase Anon Auth failed, falling back to mock."); }
+        if (!supabase) throw new Error("Supabase Client not initialized.");
+        
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (error) throw error;
+        
+        if (data.session) {
+            // Slight delay to allow trigger to run if needed, but optimally trigger runs BEFORE this returns
+            await new Promise(r => setTimeout(r, 500));
+            const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', data.session.user.id).single();
+            
+            if (profileError) throw profileError;
+            if (profile) return { user: validateData(UserProfileSchema, { ...profile, isGuest: true }, 'AuthGuest') as UserProfile, message: "Welcome Guest!" };
         }
-        await new Promise(resolve => setTimeout(resolve, 200));
-        let guestUser: UserProfile;
-        const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-        if (storedGuest) {
-            guestUser = JSON.parse(storedGuest);
-            const now = Date.now();
-            if (now - (guestUser.lastLogin || 0) > 24 * 60 * 60 * 1000) { guestUser.gcBalance = 50000; guestUser.lastLogin = now; }
-        } else {
-            guestUser = { id: 'guest_' + Date.now(), email: 'Guest Player', gcBalance: 50000, scBalance: 0, vipLevel: 'Guest', hasUnlockedRedemption: false, redeemableSc: 0, isGuest: true, lastLogin: Date.now(), tenantId: DEMO_TENANT_ID, kycStatus: 'unverified', isAddressLocked: false };
-        }
-        localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestUser));
-        return { user: validateData(UserProfileSchema, guestUser, 'MockAuthGuest'), message: "Welcome Guest! (Demo Mode)" };
+        throw new Error("Failed to create guest session.");
     },
     signIn: async (email: string, password?: string, profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null, error: string | null, message?: string }> => {
-      if (supabase) {
-        try {
-            if (profileData && password) {
-                const { data, error } = await supabase.auth.signUp({ email, password, options: { data: profileData } });
-                if (error) throw error;
-                if (data.user) {
-                     await new Promise(r => setTimeout(r, 1500)); 
+      if (!supabase) throw new Error("Supabase Client not initialized.");
+
+      try {
+        if (profileData && password) {
+            // REGISTER
+            const { data, error } = await supabase.auth.signUp({ email, password, options: { data: profileData } });
+            if (error) throw error;
+            
+            if (data.user) {
+                 // Wait for database trigger to create profile
+                 // Retry logic could be added here for robustness
+                 let retries = 3;
+                 while (retries > 0) {
+                     await new Promise(r => setTimeout(r, 1000)); 
                      let { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-                     return { data: validateData(UserProfileSchema, profile, 'AuthRegister'), error: null, message: "Welcome!" };
-                }
-            } else if (password) {
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                if (error) throw error;
-                if (data.user) {
-                    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-                    return { data: validateData(UserProfileSchema, profile, 'AuthLogin'), error: null, message: "Welcome back!" };
-                }
+                     if (profile) return { data: validateData(UserProfileSchema, profile, 'AuthRegister') as UserProfile, error: null, message: "Welcome!" };
+                     retries--;
+                 }
+                 throw new Error("Profile creation timed out. Please contact support.");
             }
-        } catch (e: any) { return { data: null, error: e.message || "Connection Error" }; }
+        } else if (password) {
+            // LOGIN
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            
+            if (data.user) {
+                const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+                if (profileError) throw profileError;
+                return { data: validateData(UserProfileSchema, profile, 'AuthLogin') as UserProfile, error: null, message: "Welcome back!" };
+            }
+        }
+        return { data: null, error: "Authentication failed" };
+      } catch (e: any) { 
+          throw e; // Propagate error to UI
       }
-      await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-      const stored = localStorage.getItem(STORAGE_KEY);
-      let user: UserProfile;
-      if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.email === email) user = parsed;
-          else {
-              if(!profileData) return { data: null, error: "User not found." };
-              user = { id: 'user_'+Math.random(), email, gcBalance: 50000, scBalance: 20, vipLevel: 'Bronze', hasUnlockedRedemption: false, redeemableSc: 0, isGuest: false, kycStatus: 'unverified', isAddressLocked: true, ...profileData };
-          }
-      } else {
-          if(!profileData) return { data: null, error: "User not found." };
-          user = { id: 'user_'+Math.random(), email, gcBalance: 50000, scBalance: 20, vipLevel: 'Bronze', hasUnlockedRedemption: false, redeemableSc: 0, isGuest: false, kycStatus: 'unverified', isAddressLocked: true, ...profileData };
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-      return { data: validateData(UserProfileSchema, user, 'MockAuth'), error: null, message: "Welcome (Demo Mode)" };
     },
-    resetPassword: async (email: string) => { if (supabase) await supabase.auth.resetPasswordForEmail(email); return { success: true, message: "Reset link sent." }; },
-    signOut: async () => { if (supabase) await supabase.auth.signOut(); localStorage.removeItem(STORAGE_KEY); },
+    resetPassword: async (email: string) => { 
+        if (!supabase) throw new Error("No client");
+        await supabase.auth.resetPasswordForEmail(email); 
+        return { success: true, message: "Reset link sent." }; 
+    },
+    signOut: async () => { 
+        if (supabase) await supabase.auth.signOut(); 
+    },
     getSession: async () => { 
-        if (supabase) { 
-            try { const { data: { session } } = await supabase.auth.getSession(); if (session) { const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single(); return validateData(UserProfileSchema, data, 'SessionCheck'); } } catch (e) { return null; } 
-        } 
-        const stored = localStorage.getItem(STORAGE_KEY); return stored ? JSON.parse(stored) : null;
+        if (!supabase) return null;
+        try { 
+            const { data: { session } } = await supabase.auth.getSession(); 
+            if (session) { 
+                const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single(); 
+                return validateData(UserProfileSchema, data, 'SessionCheck') as UserProfile; 
+            } 
+        } catch (e) { return null; }
+        return null;
     },
     subscribeToUserChanges: (userId: string, callback: (payload: UserProfile) => void) => { 
         if (!supabase) return () => {}; 
-        const channel = supabase.channel(`public:profiles:id=eq.${userId}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => { if (payload.new) callback(validateData(UserProfileSchema, payload.new, 'RealtimeProfile')); }).subscribe(); 
+        const channel = supabase.channel(`public:profiles:id=eq.${userId}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, (payload) => { 
+            if (payload.new) {
+                callback(validateData(UserProfileSchema, payload.new, 'RealtimeProfile') as UserProfile);
+            }
+        }).subscribe(); 
         return () => { supabase.removeChannel(channel); }; 
     },
     submitKyc: async (userId: string): Promise<{ success: boolean }> => {
-        if (supabase) await supabase.from('profiles').update({ kycStatus: 'pending' }).eq('id', userId);
+        if (!supabase) throw new Error("No client");
+        const { error } = await supabase.from('profiles').update({ kycStatus: 'pending' }).eq('id', userId);
+        if (error) throw error;
         return { success: true };
     }
   },
   game: {
     spin: async (user: UserProfile, wager: number, currency: CurrencyType, gameId: string, isFreeSpin: boolean = false, plinkoConfig?: any): Promise<{ user: UserProfile, result: WinResult }> => {
+        if (!supabase) throw new Error("Network Error: Supabase client missing");
+
+        // Geo-check is mandatory
         if (!isFreeSpin && currency === CurrencyType.SC) { const geoCheck = await complianceService.verifyLocation(); if (!geoCheck.allowed) throw new Error(`Location Blocked: ${geoCheck.reason}`); }
+        
+        // 1. Calculate result structure locally (Client-Predictive / Outcome Proposal)
+        // In this architecture, we send the outcome to the server to be verified and logged.
         let math: { result: WinResult };
         if (gameId.includes('plinko')) math = calculatePlinkoResult(wager, plinkoConfig?.rows || 12, plinkoConfig?.risk || 'Medium');
         else math = calculateSpinResult(wager, currency, gameId, isFreeSpin);
         
-        if (supabase && !user.isGuest) {
-             try {
-                 const { data, error } = await supabase.rpc('execute_atomic_transaction', { game_type: gameId, currency: currency, wager_amount: isFreeSpin ? 0 : wager, payout_amount: math.result.totalWin, outcome_data: math.result });
-                 if (error) throw error;
-                 const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-                 return { user: validateData(UserProfileSchema, updatedProfile, 'SpinUpdate'), result: validateData(WinResultSchema, math.result, 'SpinResult') };
-             } catch (e) { throw new Error("Transaction failed."); }
-        } 
-        await new Promise(resolve => setTimeout(resolve, MOCK_DELAY)); 
-        let updatedUser = { ...user };
-        const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
-        if (!isFreeSpin) { if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds"); updatedUser[balanceField] -= wager; }
-        if (math.result.totalWin > 0) { updatedUser[balanceField] += math.result.totalWin; if (currency === CurrencyType.SC) updatedUser.redeemableSc += math.result.totalWin; }
-        const key = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
-        if (!supabase || user.isGuest) localStorage.setItem(key, JSON.stringify(updatedUser));
-        return { user: validateData(UserProfileSchema, updatedUser, 'MockSpinUpdate'), result: math.result };
+        // 2. Server-Authoritative Transaction (RPC)
+        const { data, error } = await supabase.rpc('execute_atomic_transaction', { 
+            game_type: gameId, 
+            currency: currency, 
+            wager_amount: isFreeSpin ? 0 : wager, 
+            payout_amount: math.result.totalWin, 
+            outcome_data: math.result 
+        });
+
+        if (error) {
+            console.error("RPC Error:", error);
+            throw new Error(error.message || "Transaction Failed");
+        }
+
+        // 3. Fetch latest balance to ensure sync
+        const { data: updatedProfile, error: fetchError } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (fetchError) throw fetchError;
+
+        return { user: validateData(UserProfileSchema, updatedProfile, 'SpinUpdate') as UserProfile, result: validateData(WinResultSchema, math.result, 'SpinResult') };
     },
     buyScratchTicket: async (user: UserProfile, currency: CurrencyType): Promise<{ user: UserProfile, result: WinResult }> => {
+        if (!supabase) throw new Error("No client");
         if (currency === CurrencyType.SC) { const geoCheck = await complianceService.verifyLocation(); if (!geoCheck.allowed) throw new Error(`Location Blocked: ${geoCheck.reason}`); }
-        if (supabase && !user.isGuest) { /* ... same rpc call ... */ }
-        await new Promise(resolve => setTimeout(resolve, 500));
-        let updatedUser = { ...user };
+        
         const cost = currency === 'GC' ? 500 : 1.00;
-        const balanceField = currency === 'GC' ? 'gcBalance' : 'scBalance';
-        if (updatedUser[balanceField] < cost) throw new Error("Insufficient Funds");
-        updatedUser[balanceField] -= cost;
-        const rand = Math.random(); let prize = 0; let grid = ['🍒','🍋','🍊','🍒','🍋','🍊','🍒','🍋','🍊'];
-        if(rand < 0.2) { prize = cost * 2; grid=['💰','💰','💰','🍒','🍋','🍊','🍒','🍋','🍊']; } 
-        if (prize > 0) { updatedUser[balanceField] += prize; if(currency === 'SC') updatedUser.redeemableSc += prize; }
-        const key = user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY;
-        localStorage.setItem(key, JSON.stringify(updatedUser));
+        
+        // Generate ticket locally for visual (Outcome Proposal)
+        const rand = Math.random(); 
+        let prize = 0; 
+        let grid = ['🍒','🍋','🍊','🍒','🍋','🍊','🍒','🍋','🍊'];
+        if(rand < 0.2) { prize = cost * 2; grid=['💰','💰','💰','🍒','🍋','🍊','🍒','🍋','🍊']; }
+        
         const ticket: ScratchTicket = { grid, prize, currency, isWin: prize > 0, cost, tier: prize > 0 ? 'mid' : 'loser' };
-        return { user: updatedUser, result: { totalWin: prize, winningLines: [], isBigWin: false, freeSpinsWon: 0, bonusText: '', stopIndices: [], scratchOutcome: ticket, rngSeed: 'mock' } };
+
+        const { error } = await supabase.rpc('execute_atomic_transaction', {
+            game_type: 'scratch',
+            currency: currency,
+            wager_amount: cost,
+            payout_amount: prize,
+            outcome_data: ticket
+        });
+
+        if (error) throw error;
+
+        const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        return { user: validateData(UserProfileSchema, updatedProfile, 'ScratchUpdate') as UserProfile, result: { totalWin: prize, winningLines: [], isBigWin: false, freeSpinsWon: 0, bonusText: '', stopIndices: [], scratchOutcome: ticket } };
     },
-    getHistory: async (): Promise<GameHistoryEntry[]> => { if (supabase) { /* ... fetch ... */ } return []; },
-    subscribeToHistory: (callback: (entry: GameHistoryEntry) => void) => { if (!supabase) return () => {}; /* ... sub ... */ return () => {}; },
+    getHistory: async (): Promise<GameHistoryEntry[]> => { 
+        if (!supabase) return [];
+        const { data, error } = await supabase.from('game_history').select('*').order('timestamp', { ascending: false }).limit(50);
+        if (error) throw error;
+        return data as GameHistoryEntry[];
+    },
+    subscribeToHistory: (callback: (entry: GameHistoryEntry) => void) => { 
+        if (!supabase) return () => {}; 
+        const channel = supabase.channel('public:game_history').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_history' }, (payload) => callback(payload.new as GameHistoryEntry)).subscribe();
+        return () => { supabase.removeChannel(channel); }; 
+    },
     getPlinkoMultipliers: getPlinkoMultipliers
   },
   blackjack: {
     start: async (user: UserProfile, wager: number, currency: CurrencyType): Promise<{ game: BlackjackState, user: UserProfile }> => {
-        if (currency === CurrencyType.SC && !(await complianceService.verifyLocation()).allowed) throw new Error("Location Blocked");
-        if (supabase && !user.isGuest) { /* RPC */ }
-        await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-        let updatedUser = { ...user };
-        const balanceField = currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
-        if (updatedUser[balanceField] < wager) throw new Error("Insufficient Funds");
-        updatedUser[balanceField] -= wager; 
-        const deck = generateDeck();
-        const p_hand = [deck.shift()!, deck.shift()!];
-        const d_hand = [deck.shift()!, deck.shift()!];
-        const gameId = generateIdempotencyKey();
-        const gameState: BlackjackState = { id: gameId, deck, player_hand: p_hand, dealer_hand: d_hand, player_score: calculateHandScore(p_hand), dealer_score: calculateHandScore(d_hand), status: 'active', wager, currency, payout: 0 };
-        if (gameState.player_score === 21) { 
-             if (gameState.dealer_score === 21) { gameState.status = 'push'; gameState.payout = wager; } 
-             else { gameState.status = 'player_win'; gameState.payout = wager * 2.5; }
-             updatedUser[balanceField] += gameState.payout;
-             if(currency === CurrencyType.SC) updatedUser.redeemableSc += gameState.payout;
-        }
-        MOCK_GAMES_STORE[gameId] = gameState;
-        localStorage.setItem(user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY, JSON.stringify(updatedUser));
-        return { game: gameState, user: updatedUser };
+        if (!supabase) throw new Error("No client");
+        // Attempt to call backend RPC. If missing, it will throw, satisfying "Error if backend fails".
+        const { data, error } = await supabase.rpc('blackjack_start', { wager, currency });
+        if (error) throw error; // Will throw if RPC doesn't exist
+        
+        // Assuming RPC returns { game: ..., profile: ... }
+        return { game: data.game, user: data.profile };
     },
     hit: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
-        const game = MOCK_GAMES_STORE[gameId];
-        const card = game.deck.shift()!;
-        game.player_hand.push(card);
-        game.player_score = calculateHandScore(game.player_hand);
-        if (game.player_score > 21) game.status = 'player_bust';
-        return { game: { ...game }, user };
+        if (!supabase) throw new Error("No client");
+        const { data, error } = await supabase.rpc('blackjack_hit', { game_id: gameId });
+        if (error) throw error;
+        return { game: data.game, user: data.profile };
     },
     stand: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
-        const game = MOCK_GAMES_STORE[gameId];
-        let updatedUser = { ...user };
-        const balanceField = game.currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
-        while (game.dealer_score < 17) { const card = game.deck.shift()!; game.dealer_hand.push(card); game.dealer_score = calculateHandScore(game.dealer_hand); }
-        if (game.dealer_score > 21) { game.status = 'dealer_bust'; game.payout = game.wager * 2; } 
-        else if (game.player_score > game.dealer_score) { game.status = 'player_win'; game.payout = game.wager * 2; } 
-        else if (game.player_score < game.dealer_score) { game.status = 'dealer_win'; game.payout = 0; } 
-        else { game.status = 'push'; game.payout = game.wager; }
-        if (game.payout > 0) { updatedUser[balanceField] += game.payout; if(game.currency === CurrencyType.SC) updatedUser.redeemableSc += game.payout; }
-        localStorage.setItem(user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY, JSON.stringify(updatedUser));
-        return { game: { ...game }, user: updatedUser };
+        if (!supabase) throw new Error("No client");
+        const { data, error } = await supabase.rpc('blackjack_stand', { game_id: gameId });
+        if (error) throw error;
+        return { game: data.game, user: data.profile };
     },
     doubleDown: async (gameId: string, user: UserProfile): Promise<{ game: BlackjackState, user: UserProfile }> => {
-        const game = MOCK_GAMES_STORE[gameId];
-        let updatedUser = { ...user };
-        const balanceField = game.currency === CurrencyType.GC ? 'gcBalance' : 'scBalance';
-        if (updatedUser[balanceField] < game.wager) throw new Error("Insufficient Funds");
-        updatedUser[balanceField] -= game.wager;
-        game.wager *= 2;
-        const card = game.deck.shift()!; game.player_hand.push(card); game.player_score = calculateHandScore(game.player_hand);
-        if (game.player_score > 21) game.status = 'player_bust';
-        else {
-            while (game.dealer_score < 17) { const dCard = game.deck.shift()!; game.dealer_hand.push(dCard); game.dealer_score = calculateHandScore(game.dealer_hand); }
-            if (game.dealer_score > 21) { game.status = 'dealer_bust'; game.payout = game.wager * 2; }
-            else if (game.player_score > game.dealer_score) { game.status = 'player_win'; game.payout = game.wager * 2; }
-            else if (game.player_score < game.dealer_score) { game.status = 'dealer_win'; game.payout = 0; }
-            else { game.status = 'push'; game.payout = game.wager; }
-        }
-        if (game.payout > 0) { updatedUser[balanceField] += game.payout; if (game.currency === CurrencyType.SC) updatedUser.redeemableSc += game.payout; }
-        localStorage.setItem(user.isGuest ? GUEST_STORAGE_KEY : STORAGE_KEY, JSON.stringify(updatedUser));
-        return { game: { ...game }, user: updatedUser };
+        if (!supabase) throw new Error("No client");
+        const { data, error } = await supabase.rpc('blackjack_double', { game_id: gameId });
+        if (error) throw error;
+        return { game: data.game, user: data.profile };
     }
   },
   poker: {
-      deal: async (user: UserProfile, wager: number, currency: CurrencyType) => { /* ... */ return { game: {} as PokerState, user }; },
-      draw: async (gameId: string, held: number[], user: UserProfile) => { /* ... */ return { game: {} as PokerState, user }; }
+      deal: async (user: UserProfile, wager: number, currency: CurrencyType) => { 
+          if (!supabase) throw new Error("No client");
+          const { data, error } = await supabase.rpc('poker_deal', { wager, currency });
+          if (error) throw error;
+          return { game: data.game, user: data.profile };
+      },
+      draw: async (gameId: string, held: number[], user: UserProfile) => { 
+          if (!supabase) throw new Error("No client");
+          const { data, error } = await supabase.rpc('poker_draw', { game_id: gameId, held_indices: held });
+          if (error) throw error;
+          return { game: data.game, user: data.profile };
+      }
   },
   db: {
     checkPaymentStatus: async (packageId: string): Promise<{ status: 'completed' | 'pending' | 'failed', txHash?: string, explorerUrl?: string }> => {
-        if (supabase) {
-            try {
-               const { data } = await supabase.rpc('check_transaction_status', { package_id: packageId });
-               return { 
-                   status: data?.status || 'pending',
-                   txHash: data?.tx_hash,
-                   explorerUrl: data?.explorer_url
-               };
-            } catch(e) { return { status: 'pending' }; }
-        }
-        // Mock Backend Check
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Mock Success Data
-        const mockTxHash = "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
-        const mockExplorer = `https://etherscan.io/tx/${mockTxHash}`;
+        if (!supabase) throw new Error("No client");
+        const { data, error } = await supabase.rpc('check_transaction_status', { package_id: packageId });
+        if (error) throw error;
         
         return { 
-            status: 'completed', 
-            txHash: mockTxHash,
-            explorerUrl: mockExplorer
+            status: data?.status || 'pending',
+            txHash: data?.tx_hash,
+            explorerUrl: data?.explorer_url
         };
     },
     purchasePackage: async (price: number, gcAmount: number, scAmount: number): Promise<UserProfile> => {
-        if (supabase) {
-            try {
-                // In production, verify the webhook has been received before calling this.
-                // For this demo, we assume the frontend validation (widget success) is sufficient to trigger the RPC.
-                const { data, error } = await supabase.rpc('purchase_package', { price, gc_amount: gcAmount, sc_amount: scAmount });
-                if (!error) {
-                    const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).single();
-                    return validateData(UserProfileSchema, updatedProfile, 'Purchase');
-                }
-            } catch(e) {}
-        }
-        await new Promise(resolve => setTimeout(resolve, 100)); // Instant update after 'check' passed
-        const stored = localStorage.getItem(STORAGE_KEY); if (!stored) throw new Error("No session"); const user = JSON.parse(stored) as UserProfile;
-        user.gcBalance += gcAmount; user.scBalance += scAmount; if (price >= REDEMPTION_UNLOCK_PRICE) user.hasUnlockedRedemption = true;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); return user;
+        if (!supabase) throw new Error("No client");
+        const { data, error } = await supabase.rpc('purchase_package', { price, gc_amount: gcAmount, sc_amount: scAmount });
+        if (error) throw error;
+        
+        const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).single();
+        return validateData(UserProfileSchema, updatedProfile, 'Purchase') as UserProfile;
     },
     redeem: async (amount: number): Promise<UserProfile> => {
-        if (supabase) {
-            try {
-                const { data, error } = await supabase.rpc('redeem_sc', { amount });
-                if (!error) {
-                    const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).single();
-                    return validateData(UserProfileSchema, updatedProfile, 'Redeem');
-                }
-            } catch(e) {}
-        }
-        await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-        const stored = localStorage.getItem(STORAGE_KEY); if (!stored) throw new Error("No session"); const user = JSON.parse(stored) as UserProfile;
-        if (user.redeemableSc >= amount) { user.scBalance -= amount; user.redeemableSc -= amount; }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); return user;
+        if (!supabase) throw new Error("No client");
+        const { data, error } = await supabase.rpc('redeem_sc', { amount });
+        if (error) throw error;
+        
+        const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).single();
+        return validateData(UserProfileSchema, updatedProfile, 'Redeem') as UserProfile;
     }
   }
 };

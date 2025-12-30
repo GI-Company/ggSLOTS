@@ -37,9 +37,7 @@ const supabaseUrl = getVar('SUPABASE_URL');
 const supabaseAnonKey = getVar('SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn("Supabase Credentials missing. App will run in Mock Mode.");
+    throw new Error("CRITICAL: Supabase credentials missing. Check .env file.");
 }
 
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
