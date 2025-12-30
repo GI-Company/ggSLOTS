@@ -119,12 +119,15 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
                 <div className="flex flex-col md:flex-row items-center justify-between border-b border-slate-800 pb-4 gap-4">
                      <div className="flex items-center gap-3 w-full md:w-auto">
                         <div className="p-2 bg-indigo-500/20 rounded-lg hidden sm:block">
-                            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
                         </div>
                         
                         {/* Search Bar */}
                         <div className="relative w-full md:w-64">
                             <input 
+                                id="game-search"
+                                name="search"
+                                autoComplete="off"
                                 type="text" 
                                 placeholder="Search games..." 
                                 value={searchQuery}

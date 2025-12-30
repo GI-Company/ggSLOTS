@@ -488,9 +488,11 @@ export const RedeemModal: React.FC<{ onClose: () => void; user: UserProfile; onR
                 ) : (
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Amount to Redeem</label>
+                            <label htmlFor="redeem-amount" className="block text-xs font-bold text-slate-400 uppercase mb-2">Amount to Redeem</label>
                             <div className="relative">
                                 <input 
+                                    id="redeem-amount"
+                                    name="redeemAmount"
                                     type="number" 
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
@@ -594,12 +596,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, type: ini
             {mode === 'login' && (
                 <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
-                        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none" />
+                        <label htmlFor="login-email" className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
+                        <input id="login-email" name="email" autoComplete="username" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none" />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Password</label>
-                        <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none" />
+                        <label htmlFor="login-password" className="block text-xs font-bold text-slate-400 uppercase mb-1">Password</label>
+                        <input id="login-password" name="password" autoComplete="current-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none" />
                         <div className="text-right mt-1"><button type="button" onClick={() => setMode('forgot')} className="text-xs text-indigo-400 hover:text-white font-bold">Forgot Password?</button></div>
                     </div>
                     <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-900/40 transition-all">LOG IN</button>
@@ -618,27 +620,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onAuth, type: ini
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3">
-                        <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">First Name</label><input type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
-                        <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Last Name</label><input type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div><label htmlFor="reg-firstname" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">First Name</label><input id="reg-firstname" name="firstName" autoComplete="given-name" type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div><label htmlFor="reg-lastname" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Last Name</label><input id="reg-lastname" name="lastName" autoComplete="family-name" type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
                     </div>
-                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date of Birth</label><input type="date" required value={dob} onChange={(e) => setDob(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                    <div><label htmlFor="reg-dob" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date of Birth</label><input id="reg-dob" name="dob" autoComplete="bday" type="date" required value={dob} onChange={(e) => setDob(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
                     
-                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Address</label><input type="text" required value={address1} onChange={(e) => setAddress1(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                    <div><label htmlFor="reg-address" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Address</label><input id="reg-address" name="addressLine1" autoComplete="address-line1" type="text" required value={address1} onChange={(e) => setAddress1(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
                     <div className="grid grid-cols-6 gap-2">
-                        <div className="col-span-3"><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">City</label><input type="text" required value={city} onChange={(e) => setCity(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
-                        <div className="col-span-1"><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">State</label><input type="text" required maxLength={2} value={state} onChange={(e) => setState(e.target.value.toUpperCase())} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
-                        <div className="col-span-2"><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Zip</label><input type="text" required maxLength={10} value={zip} onChange={(e) => setZip(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div className="col-span-3"><label htmlFor="reg-city" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">City</label><input id="reg-city" name="city" autoComplete="address-level2" type="text" required value={city} onChange={(e) => setCity(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div className="col-span-1"><label htmlFor="reg-state" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">State</label><input id="reg-state" name="state" autoComplete="address-level1" type="text" required maxLength={2} value={state} onChange={(e) => setState(e.target.value.toUpperCase())} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div className="col-span-2"><label htmlFor="reg-zip" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Zip</label><input id="reg-zip" name="zip" autoComplete="postal-code" type="text" required maxLength={10} value={zip} onChange={(e) => setZip(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
                     </div>
 
-                    <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                    <div><label htmlFor="reg-email" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Email</label><input id="reg-email" name="email" autoComplete="username" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
                     <div className="grid grid-cols-2 gap-3">
-                        <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
-                        <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Confirm</label><input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div><label htmlFor="reg-password" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Password</label><input id="reg-password" name="password" autoComplete="new-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                        <div><label htmlFor="reg-confirm" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Confirm</label><input id="reg-confirm" name="confirmPassword" autoComplete="new-password" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
                     </div>
 
                     <div className="mt-4 p-3 bg-slate-950 rounded-xl border border-slate-800 text-[10px] text-slate-400 leading-relaxed">
                         <label className="flex items-start gap-2 cursor-pointer">
-                            <input type="checkbox" className="mt-0.5" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
+                            <input id="reg-terms" name="terms" type="checkbox" className="mt-0.5" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
                             <span>I certify I am 18+, a resident of a valid state, and accept the Terms & Sweepstakes Rules. Address is permanent.</span>
                         </label>
                     </div>

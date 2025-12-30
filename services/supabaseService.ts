@@ -338,42 +338,71 @@ export const supabaseService = {
   },
   blackjack: {
     start: async (user: UserProfile, wager: number, currency: CurrencyType): Promise<{ game: BlackjackState, user: UserProfile }> => {
-        // Placeholder for full blackjack RPC integration. 
-        // For now, we simulate success to keep UI working while DB is fixed.
+        // Mocked or Real RPC call
+        const { data, error } = await supabase.rpc('blackjack_start', { wager, currency });
+        if (error) throw error;
+        
+        // Ensure data exists and map profile
+        if (!data || !data.game || !data.profile) throw new Error("Invalid response from Blackjack RPC");
+
         return { 
-            game: { id: 'sim', deck: [], player_hand: [{suit:'H',rank:'A',value:11},{suit:'D',rank:'K',value:10}], dealer_hand: [{suit:'C',rank:'5',value:5},{suit:'S',rank:'8',value:8}], player_score: 21, dealer_score: 13, status: 'active', wager, currency, payout: 0 },
-            user: user 
+            game: data.game,
+            user: mapProfile(data.profile) 
         };
     },
-    hit: async (gameId: string, user: UserProfile) => { return { game: {} as any, user }; },
-    stand: async (gameId: string, user: UserProfile) => { return { game: {} as any, user }; },
-    doubleDown: async (gameId: string, user: UserProfile) => { return { game: {} as any, user }; }
+    hit: async (gameId: string, user: UserProfile) => { 
+        const { data, error } = await supabase.rpc('blackjack_hit', { game_id: gameId });
+        if (error) throw error;
+        return { game: data.game, user: mapProfile(data.profile) };
+    },
+    stand: async (gameId: string, user: UserProfile) => { 
+         const { data, error } = await supabase.rpc('blackjack_stand', { game_id: gameId });
+         if (error) throw error;
+         return { game: data.game, user: mapProfile(data.profile) };
+    },
+    doubleDown: async (gameId: string, user: UserProfile) => { 
+         const { data, error } = await supabase.rpc('blackjack_double', { game_id: gameId });
+         if (error) throw error;
+         return { game: data.game, user: mapProfile(data.profile) };
+    }
   },
   poker: {
       deal: async (user: UserProfile, wager: number, currency: CurrencyType) => { 
-          return { game: {} as any, user };
+          const { data, error } = await supabase.rpc('poker_deal', { wager, currency });
+          if (error) throw error;
+          return { game: data.game, user: mapProfile(data.profile) };
       },
       draw: async (gameId: string, held: number[], user: UserProfile) => { 
-          return { game: {} as any, user };
+          const { data, error } = await supabase.rpc('poker_draw', { game_id: gameId, held_indices: held });
+          if (error) throw error;
+          return { game: data.game, user: mapProfile(data.profile) };
       }
   },
   db: {
     checkPaymentStatus: async (packageId: string): Promise<{ status: 'completed' | 'pending' | 'failed', txHash?: string, explorerUrl?: string }> => {
         if (!supabase) throw new Error("No client");
-        // Mock success for demo
-        return { status: 'completed', txHash: '0x123...abc', explorerUrl: 'https://etherscan.io' };
+        const { data, error } = await supabase.rpc('check_transaction_status', { package_id: packageId });
+        if (error) throw error;
+        
+        return { 
+            status: data?.status || 'pending',
+            txHash: data?.tx_hash,
+            explorerUrl: data?.explorer_url
+        };
     },
     purchasePackage: async (price: number, gcAmount: number, scAmount: number): Promise<UserProfile> => {
         if (!supabase) throw new Error("No client");
-        const { data, error } = await supabase.rpc('execute_atomic_transaction', { game_type: 'purchase', currency: 'GC', wager_amount: 0, payout_amount: gcAmount, outcome_data: { type: 'pkg_purchase' } });
-        // NOTE: We need a separate RPC for SC purchase usually, but sticking to simple one for now.
+        const { error } = await supabase.rpc('purchase_package', { price, gc_amount: gcAmount, sc_amount: scAmount });
+        if (error) throw error;
         
         const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).single();
         return validateData(UserProfileSchema, mapProfile(updatedProfile), 'Purchase') as UserProfile;
     },
     redeem: async (amount: number): Promise<UserProfile> => {
         if (!supabase) throw new Error("No client");
-        // For redemption we update balances
+        const { error } = await supabase.rpc('redeem_sc', { amount });
+        if (error) throw error;
+        
         const { data: updatedProfile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).single();
         return validateData(UserProfileSchema, mapProfile(updatedProfile), 'Redeem') as UserProfile;
     }
