@@ -193,11 +193,6 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
 
       // Calculate Result
       let totalRoundWin = 0;
-      // We need to calculate based on the latest state, but setState is async. 
-      // In a real app, we'd check the final state. Here we re-run logic or trust the last state update.
-      // Better: Re-calculate strictly from drawSequence for accuracy.
-      
-      // ... For this demo, let's grab the active cards from the pool manually after delay
       await new Promise(r => setTimeout(r, 100)); // Wait for last render
       
       // Re-evaluate hits locally to ensure sync
@@ -339,51 +334,54 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
                 </div>
 
                 {/* CENTER: CARDS */}
-                <div className="flex-1 p-4 sm:p-8 bg-[#0f172a] relative overflow-y-auto">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-900 to-black pointer-events-none"></div>
+                <div className="flex-1 bg-[#0f172a] relative overflow-y-auto">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-900 to-black pointer-events-none fixed"></div>
                     
-                    <div className={`grid gap-4 sm:gap-8 h-full place-content-center transition-all duration-500 ${activeCards.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : activeCards.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'}`}>
-                        {activeCards.map(card => (
-                            <div key={card.id} className="bg-slate-100 rounded-xl overflow-hidden shadow-2xl border-4 border-white/10 transform transition-transform duration-300 hover:scale-[1.01]">
-                                {/* Card Header */}
-                                <div className="bg-indigo-600 text-white flex justify-between items-center px-4 py-2 shadow-md z-10 relative">
-                                    <span className="text-[10px] font-bold opacity-70">ID: {card.id + 1}</span>
-                                    <div className="grid grid-cols-5 gap-4 font-black font-display tracking-widest">
-                                        <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+                    {/* Layout Fix: min-h-full ensures centering when small, but allows scroll when large */}
+                    <div className="min-h-full w-full flex flex-col items-center justify-center p-4 sm:p-8 relative z-10">
+                        <div className={`grid gap-6 w-full transition-all duration-500 ${activeCards.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 lg:grid-cols-2 max-w-5xl'}`}>
+                            {activeCards.map(card => (
+                                <div key={card.id} className="bg-slate-100 rounded-xl overflow-hidden shadow-2xl border-4 border-white/10 transform transition-transform duration-300 hover:scale-[1.01]">
+                                    {/* Card Header */}
+                                    <div className="bg-indigo-600 text-white flex justify-between items-center px-4 py-2 shadow-md z-10 relative">
+                                        <span className="text-[10px] font-bold opacity-70">ID: {card.id + 1}</span>
+                                        <div className="grid grid-cols-5 gap-4 font-black font-display tracking-widest">
+                                            <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+                                        </div>
+                                        <span className="text-[10px] font-bold opacity-70">{card.serial.split('-')[1]}</span>
                                     </div>
-                                    <span className="text-[10px] font-bold opacity-70">{card.serial.split('-')[1]}</span>
+                                    {/* Grid */}
+                                    <div className="grid grid-cols-5 gap-[1px] bg-slate-300 p-[1px]">
+                                        {card.grid.map((row, r) => row.map((num, c) => {
+                                            const isHit = card.hits[r][c];
+                                            const isFree = r===2 && c===2;
+                                            return (
+                                                <div key={`${r}-${c}`} className={`
+                                                    aspect-square flex items-center justify-center font-bold text-lg sm:text-xl relative transition-colors duration-200
+                                                    ${isFree ? 'bg-indigo-200' : 'bg-white'}
+                                                    ${isHit && !isFree ? 'text-white' : 'text-slate-800'}
+                                                `}>
+                                                    {isFree ? (
+                                                        <svg className="w-8 h-8 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                                                    ) : (
+                                                        num
+                                                    )}
+                                                    
+                                                    {/* Daub Mark */}
+                                                    {isHit && (
+                                                        <div className="absolute inset-0 flex items-center justify-center animate-in zoom-in duration-200">
+                                                            <div className={`w-[80%] h-[80%] rounded-full opacity-80 ${isFree ? 'bg-indigo-500' : 'bg-red-500'} mix-blend-multiply`}></div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <span className="relative z-10">{!isFree && num}</span>
+                                                </div>
+                                            );
+                                        }))}
+                                    </div>
                                 </div>
-                                {/* Grid */}
-                                <div className="grid grid-cols-5 gap-[1px] bg-slate-300 p-[1px]">
-                                    {card.grid.map((row, r) => row.map((num, c) => {
-                                        const isHit = card.hits[r][c];
-                                        const isFree = r===2 && c===2;
-                                        return (
-                                            <div key={`${r}-${c}`} className={`
-                                                aspect-square flex items-center justify-center font-bold text-lg sm:text-xl relative transition-colors duration-200
-                                                ${isFree ? 'bg-indigo-200' : 'bg-white'}
-                                                ${isHit && !isFree ? 'text-white' : 'text-slate-800'}
-                                            `}>
-                                                {isFree ? (
-                                                    <svg className="w-8 h-8 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                                                ) : (
-                                                    num
-                                                )}
-                                                
-                                                {/* Daub Mark */}
-                                                {isHit && (
-                                                    <div className="absolute inset-0 flex items-center justify-center animate-in zoom-in duration-200">
-                                                        <div className={`w-[80%] h-[80%] rounded-full opacity-80 ${isFree ? 'bg-indigo-500' : 'bg-red-500'} mix-blend-multiply`}></div>
-                                                    </div>
-                                                )}
-                                                
-                                                <span className="relative z-10">{!isFree && num}</span>
-                                            </div>
-                                        );
-                                    }))}
-                                </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
 
                     {gamePhase === 'result' && winAmount > 0 && (

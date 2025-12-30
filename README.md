@@ -15,10 +15,10 @@ This application strictly follows a **"Zero-Trust Client"** architecture. No bus
 
 ```mermaid
 graph TD
-    User[User Client] -->|1. Auth (JWT)| Auth[Supabase Auth]
+    User[User Client] -->|1. Auth JWT| Auth[Supabase Auth]
     User -->|2. Crypto Payment| NOW[NOWPayments Widget]
     
-    subgraph "The Trusted Core (PostgreSQL)"
+    subgraph Core [Trusted Core - PostgreSQL]
         API[Postgres Stored Procedures] -->|Lock Row| Wallets[(Wallets Table)]
         API -->|Calculate Outcome| Logic[PL/pgSQL Logic]
         Logic -->|Commit Tx| Ledger[(Game History)]
@@ -27,8 +27,8 @@ graph TD
     
     NOW -->|3. IPN Webhook| Edge[Supabase Edge Function]
     Edge -->|4. Credit Account| API
-    User -->|5. Game Action (RPC)| API
-    Wallets -->|6. Emit Event (WAL)| Realtime[Supabase Realtime]
+    User -->|5. Game Action RPC| API
+    Wallets -->|6. Emit Event WAL| Realtime[Supabase Realtime]
     Realtime -->|7. Push Balance Update| User
 ```
 
