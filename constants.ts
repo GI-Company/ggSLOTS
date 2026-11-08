@@ -133,12 +133,12 @@ const INITIAL_GAMES_LIST: GameConfig[] = [
   { id: 'plinko', title: 'Plinko Classic', image: '', tag: 'Original', category: 'Instant', volatility: 'Variable', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x1,000', isDemo: true },
   { id: 'plinko-x', title: 'Plinko X', image: '', tag: 'High Risk', category: 'Instant', volatility: 'High', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x10,000', isDemo: true },
   { id: 'plinko-party', title: 'Plinko Party', image: '', tag: 'Fun', category: 'Instant', volatility: 'Low', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: '1 SC', maxMultiplier: 'x2,000', isDemo: true },
-  { id: 'scratch-777', title: 'Lucky 7s', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '1k GC', maxWager: '5 SC', maxMultiplier: 'x5,000', isDemo: true },
-  { id: 'scratch-gold', title: 'Gold Rush', image: '', tag: 'Instant', category: 'Instant', volatility: 'Medium', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x1,000', isDemo: true },
-  { id: 'scratch-neon', title: 'Neon Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Low', minWager: '200 GC', maxWager: '1 SC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'scratch-zombie', title: 'Zombie Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x10,000', isDemo: true },
-  { id: 'scratch-diamond', title: 'Diamond Dreams', image: '', tag: 'Instant', category: 'Instant', volatility: 'Very High', minWager: '2k GC', maxWager: '10 SC', maxMultiplier: 'x20,000', isDemo: true },
+  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: 'GC demo only', maxMultiplier: 'x2,000', isDemo: true },
+  { id: 'scratch-777', title: 'Lucky 7s', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '1k GC', maxWager: 'GC demo only', maxMultiplier: 'x5,000', isDemo: true },
+  { id: 'scratch-gold', title: 'Gold Rush', image: '', tag: 'Instant', category: 'Instant', volatility: 'Medium', minWager: '500 GC', maxWager: 'GC demo only', maxMultiplier: 'x1,000', isDemo: true },
+  { id: 'scratch-neon', title: 'Neon Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Low', minWager: '200 GC', maxWager: 'GC demo only', maxMultiplier: 'x500', isDemo: true },
+  { id: 'scratch-zombie', title: 'Zombie Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '500 GC', maxWager: 'GC demo only', maxMultiplier: 'x10,000', isDemo: true },
+  { id: 'scratch-diamond', title: 'Diamond Dreams', image: '', tag: 'Instant', category: 'Instant', volatility: 'Very High', minWager: '2k GC', maxWager: 'GC demo only', maxMultiplier: 'x20,000', isDemo: true },
 
   // --- SLOTS ---
   { id: 'cosmic-cash', title: 'Cosmic Cash', image: '', tag: 'Popular', category: 'Slots', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,200', isDemo: true, style: { background: 'linear-gradient(to bottom, #1e1b4b, #312e81, #0f172a)', accentColor: '#6366f1' } },

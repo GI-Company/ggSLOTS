@@ -76,7 +76,7 @@ export const App: React.FC = () => {
   useEffect(() => {
       if (sweepsLocked && currency === CurrencyType.SC) {
           setCurrency(CurrencyType.GC);
-          toast.error('Sweeps Cash is closed in your region. Gold Coin play stays open.');
+          toast.error('Sweeps Cash is unavailable in the free-play preview. Gold Coin games stay open.');
       }
   }, [sweepsLocked, currency]);
 

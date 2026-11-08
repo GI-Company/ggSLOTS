@@ -10,35 +10,26 @@ interface LobbyProps {
   onGuestPlay: () => void;
 }
 
-const MOCK_WINNERS = [
-    { user: 'CryptoKing', amount: '2,500.00 SC', game: 'Plinko' },
-    { user: 'SarahJ', amount: '150.00 SC', game: 'Slots' },
-    { user: 'VegasMike', amount: '10,000.00 SC', game: 'Blackjack' },
-    { user: 'LuckyGal88', amount: '500.00 SC', game: 'Scratch' },
-    { user: 'TomB', amount: '45.00 SC', game: 'Slots' },
-    { user: 'WhaleWatcher', amount: '5,000.00 SC', game: 'Plinko' },
+const DEMO_HIGHLIGHTS = [
+    'Gold Coins are free-play credits only',
+    'No purchases or cash prizes',
+    'Nebula Mines, Orbit Crash, Solar Roulette',
+    'Balances are stored locally on this device'
 ];
 
-const LiveTicker = () => {
-    return (
-        <div className="w-full bg-slate-950/80 border-b border-slate-800 overflow-hidden flex items-center h-10 relative z-30">
-            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#020617] to-transparent z-10"></div>
-            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#020617] to-transparent z-10"></div>
-            
-            <div className="flex items-center gap-8 animate-scroll whitespace-nowrap min-w-full">
-                {[...MOCK_WINNERS, ...MOCK_WINNERS, ...MOCK_WINNERS].map((win, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                        <span className="text-white">{win.user}</span>
-                        <span>won</span>
-                        <span className="text-green-400 text-glow">{win.amount}</span>
-                        <span className="opacity-50">on {win.game}</span>
-                    </div>
-                ))}
-            </div>
+const LiveTicker = () => (
+    <div aria-label="Free-play preview information" className="w-full bg-slate-950/80 border-b border-slate-800 overflow-hidden flex items-center h-10 relative z-30">
+        <div className="flex items-center gap-8 animate-scroll whitespace-nowrap min-w-full">
+            {[...DEMO_HIGHLIGHTS, ...DEMO_HIGHLIGHTS].map((message, index) => (
+                <div key={index} className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    <span className="text-yellow-300">DEMO</span>
+                    <span className="text-white">{message}</span>
+                </div>
+            ))}
         </div>
-    );
-};
+    </div>
+);
 
 export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister, onGuestPlay }) => {
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -87,7 +78,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
                         </h1>
                         
                         <p className="text-sm sm:text-lg md:text-xl text-slate-300 mb-6 sm:mb-8 max-w-xl font-medium leading-relaxed">
-                            Explore the galaxy and uncover multipliers up to <span className="text-yellow-400 font-bold">x5,000</span>. The universe is full of rewards waiting to be claimed.
+                            Explore the galaxy and uncover multipliers up to <span className="text-yellow-400 font-bold">x5,000</span>. All prizes and balances are for demonstration only and have no monetary value.
                         </p>
                         
                         <div className="flex flex-col sm:flex-row gap-4">
@@ -100,10 +91,10 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
                             </button>
                             {!isLoggedIn && (
                                 <button 
-                                    onClick={onRegister}
+                                    onClick={onGuestPlay}
                                     className="bg-slate-800/80 hover:bg-slate-700/80 text-white font-bold py-3 sm:py-4 px-8 sm:px-10 rounded-full border border-slate-600 backdrop-blur-md transition-all duration-300 text-sm sm:text-base"
                                 >
-                                    CREATE ACCOUNT
+                                    PLAY FREE AS GUEST
                                 </button>
                             )}
                         </div>
