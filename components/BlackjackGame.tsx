@@ -136,7 +136,7 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
           const { game: newGame, user: updatedUser } = await supabaseService.blackjack.start(user, currentWager, currency);
           setGameState(newGame);
           onUpdateUser(updatedUser);
-          setTurn('dealing');
+          setTurn(newGame.status === 'active' ? 'dealing' : 'settle');
           setLoading(false);
       } catch (e: any) { toast.error(e.message); setLoading(false); }
   };
@@ -149,15 +149,32 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
           setGameState(updatedGame);
           onUpdateUser(updatedUser);
           setLoading(false);
-          if (updatedGame.status !== 'active') {
-              setTurn('botRight'); // Player busted/21 -> Move to Bot 2
-          }
+          if (updatedGame.status !== 'active') setTurn('botRight');
       } catch (e) { console.error(e); setLoading(false); }
   };
 
   const handleStand = async () => {
-      if (turn !== 'player') return;
-      setTurn('botRight'); // Don't call service 'stand' yet, wait for Bot 2 to finish
+      if (!gameState || turn !== 'player') return;
+      setLoading(true);
+      try {
+          const { game: updatedGame, user: updatedUser } = await supabaseService.blackjack.stand(gameState.id, user);
+          setGameState(updatedGame);
+          onUpdateUser(updatedUser);
+          setLoading(false);
+          if (updatedGame.status !== 'active') setTurn('botRight');
+      } catch (e: any) { toast.error(e.message || 'Stand failed'); setLoading(false); }
+  };
+
+  const handleSplit = async () => {
+      if (!gameState || turn !== 'player') return;
+      setLoading(true);
+      try {
+          const { game: updatedGame, user: updatedUser } = await supabaseService.blackjack.split(gameState.id, user);
+          setGameState(updatedGame);
+          onUpdateUser(updatedUser);
+          setLoading(false);
+          if (updatedGame.status !== 'active') setTurn('botRight');
+      } catch (e: any) { toast.error(e.message || 'Split failed'); setLoading(false); }
   };
 
   const handleDouble = async () => {
@@ -247,7 +264,7 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
                             <div className="flex gap-[-60px]">
                                 {gameState.dealer_hand.map((card, i) => (
                                     <div key={i} className={`transition-all duration-500 transform ${i > 0 ? '-ml-12' : ''} hover:-translate-y-2`}>
-                                        <Card rank={card.rank} suit={card.suit} hidden={turn !== 'settle' && turn !== 'none' && i === 0} theme={deckTheme} className="w-28 h-40 shadow-2xl" />
+                                        <Card rank={card.rank} suit={card.suit} hidden={i === 1 && turn !== 'settle'} theme={deckTheme} className="w-28 h-40 shadow-2xl" />
                                     </div>
                                 ))}
                             </div>
@@ -271,10 +288,14 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
                     <div className="w-1/3 flex flex-col items-center -mt-12">
                         {gameState && (
                             <>
-                                <div className={`relative flex transition-all duration-300 ${turn === 'player' ? 'scale-110 translate-y-[-20px]' : 'scale-100'}`}>
-                                    {gameState.player_hand.map((card, i) => (
-                                        <div key={i} className={`transition-all duration-500 transform ${i > 0 ? '-ml-16' : ''} animate-in slide-in-from-bottom-20 fade-in`}>
-                                            <Card rank={card.rank} suit={card.suit} theme={deckTheme} className={`w-32 h-48 shadow-2xl ${turn === 'player' ? 'ring-4 ring-yellow-400/50 rounded-xl' : ''}`} />
+                                <div className={`relative flex gap-6 transition-all duration-300 ${turn === 'player' ? 'scale-105 translate-y-[-12px]' : 'scale-100'}`}>
+                                    {(gameState.hands && gameState.hands.length > 0 ? gameState.hands : [gameState.player_hand]).map((hand, handIndex) => (
+                                        <div key={handIndex} className="flex">
+                                            {hand.map((card, i) => (
+                                                <div key={i} className={`transition-all duration-500 transform ${i > 0 ? '-ml-16' : ''}`}>
+                                                    <Card rank={card.rank} suit={card.suit} theme={deckTheme} className={`w-28 h-40 sm:w-32 sm:h-48 shadow-2xl ${turn === 'player' && gameState.activeHand === handIndex ? 'ring-4 ring-yellow-400/50 rounded-xl' : ''}`} />
+                                                </div>
+                                            ))}
                                         </div>
                                     ))}
                                     {turn === 'player' && <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-yellow-500 text-black font-black px-3 py-1 rounded-full text-xs shadow-lg animate-bounce">YOUR TURN</div>}
@@ -342,10 +363,19 @@ export const BlackjackGame: React.FC<BlackjackGameProps> = ({ game, currency, ba
                         {gameState.player_hand.length === 2 && (
                             <button 
                                 onClick={handleDouble}
-                                disabled={turn !== 'player' || loading || balance < gameState.wager}
+                                disabled={turn !== 'player' || loading || balance < (gameState.handBets?.[gameState.activeHand || 0] || gameState.wager)}
                                 className="bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-800 disabled:text-slate-600 text-black font-black py-4 px-10 rounded-xl text-lg shadow-lg transform active:scale-[0.98] transition-all border-b-4 border-yellow-700 disabled:border-transparent"
                             >
                                 DOUBLE
+                            </button>
+                        )}
+                        {gameState.player_hand.length === 2 && (!gameState.hands || gameState.hands.length === 1) && gameState.player_hand[0].rank === gameState.player_hand[1].rank && (
+                            <button
+                                onClick={handleSplit}
+                                disabled={turn !== 'player' || loading || balance < gameState.wager}
+                                className="bg-fuchsia-600 hover:bg-fuchsia-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-black py-4 px-10 rounded-xl text-lg shadow-lg transform active:scale-[0.98] transition-all"
+                            >
+                                SPLIT
                             </button>
                         )}
                     </div>

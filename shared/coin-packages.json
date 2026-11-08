@@ -1,0 +1,11 @@
+[
+  { "id": "pkg_5", "price": 4.99, "gcAmount": 5000, "scAmount": 5, "isBestValue": false },
+  { "id": "pkg_50", "price": 50, "gcAmount": 50000, "scAmount": 52, "isBestValue": false },
+  { "id": "pkg_75", "price": 75, "gcAmount": 80000, "scAmount": 78, "isBestValue": false },
+  { "id": "pkg_100", "price": 100, "gcAmount": 110000, "scAmount": 105, "isBestValue": true },
+  { "id": "pkg_250", "price": 250, "gcAmount": 300000, "scAmount": 260, "isBestValue": false },
+  { "id": "pkg_500", "price": 500, "gcAmount": 650000, "scAmount": 520, "isBestValue": false },
+  { "id": "pkg_750", "price": 750, "gcAmount": 1000000, "scAmount": 780, "isBestValue": false },
+  { "id": "pkg_1000", "price": 1000, "gcAmount": 1500000, "scAmount": 1050, "isBestValue": false },
+  { "id": "pkg_5000", "price": 5000, "gcAmount": 8000000, "scAmount": 5250, "isBestValue": false }
+]

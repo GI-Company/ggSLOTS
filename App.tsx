@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { UserProfile, CurrencyType, ViewType, GameConfig, WinResult } from './types';
-import { supabaseService } from './services/supabaseService';
+import { supabaseService, prepareCasinoBackend } from './services/supabaseService';
 import { geoService } from './services/geoService';
+import { paymentService } from './services/paymentService';
 import { Layout } from './components/Layout';
 import { Lobby } from './components/Lobby';
 import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
-import { GeoBlock } from './components/GeoBlock';
 import { TermsModal, PrivacyModal, ResponsibleGamingModal } from './components/Legal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import toast, { Toaster } from 'react-hot-toast';
@@ -19,6 +19,9 @@ const BlackjackGame = React.lazy(() => import('./components/BlackjackGame').then
 const ScratchGame = React.lazy(() => import('./components/ScratchGame').then(m => ({ default: m.ScratchGame })));
 const PokerGame = React.lazy(() => import('./components/PokerGame').then(m => ({ default: m.PokerGame })));
 const BingoGame = React.lazy(() => import('./components/BingoGame').then(m => ({ default: m.BingoGame })));
+const MinesGame = React.lazy(() => import('./components/MinesGame').then(m => ({ default: m.MinesGame })));
+const CrashGame = React.lazy(() => import('./components/CrashGame').then(m => ({ default: m.CrashGame })));
+const RouletteGame = React.lazy(() => import('./components/RouletteGame').then(m => ({ default: m.RouletteGame })));
 
 const GameLoader = () => (
     <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center">
@@ -39,8 +42,8 @@ export const App: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   
   // Compliance & Legal
-  const [isGeoBlocked, setIsGeoBlocked] = useState(false);
-  const [blockedRegion, setBlockedRegion] = useState<string | undefined>(undefined);
+  const [sweepsLocked, setSweepsLocked] = useState(false);
+  const [lockedRegion, setLockedRegion] = useState<string | undefined>(undefined);
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | 'responsible' | null>(null);
 
   // App-level control of sidebar state to handle game pausing/collapsing
@@ -51,18 +54,53 @@ export const App: React.FC = () => {
 
   // Initialize Session & Geo-Check
   useEffect(() => {
-    supabaseService.auth.getSession().then(session => {
-        if(session) setUser(session);
-    });
+    let cancel = false;
+    (async () => {
+        await prepareCasinoBackend();
+        const sessionUser = await supabaseService.auth.getSession();
+        if (cancel) return;
+        if (sessionUser) setUser(sessionUser);
 
-    // Check Geolocation
+        const params = new URLSearchParams(window.location.search);
+        const checkout = params.get('checkout');
+        const sessionId = params.get('session_id');
+        if (checkout === 'cancel') {
+            toast('Checkout canceled');
+            window.history.replaceState({}, '', window.location.pathname);
+        } else if (checkout === 'success' && sessionId) {
+            try {
+                const result = await paymentService.confirm(sessionId);
+                if (result.credit) {
+                    const updated = await supabaseService.db.purchasePackage(result.price, result.gcAmount, result.scAmount, sessionId);
+                    if (!cancel) setUser(updated);
+                    toast.success('Gold Coins added to your balance.');
+                } else if (result.alreadyFulfilled) {
+                    toast.success('That payment was already applied.');
+                } else {
+                    toast('Payment is still processing. Refresh after Stripe marks it paid.');
+                }
+            } catch (error: any) {
+                toast.error(error.message || 'Could not confirm the Stripe payment');
+            }
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    })();
+
     geoService.checkCompliance().then(status => {
         if (!status.allowed) {
-            setIsGeoBlocked(true);
-            setBlockedRegion(status.region);
+            setSweepsLocked(true);
+            setLockedRegion(status.region || status.country);
         }
     });
+    return () => { cancel = true; };
   }, []);
+
+  useEffect(() => {
+      if (sweepsLocked && currency === CurrencyType.SC) {
+          setCurrency(CurrencyType.GC);
+          toast.error('Sweeps Cash is closed in your region. Gold Coin play stays open.');
+      }
+  }, [sweepsLocked, currency]);
 
   // Realtime Subscription for Profile Updates
   useEffect(() => {
@@ -212,10 +250,6 @@ export const App: React.FC = () => {
     );
   };
 
-  if (isGeoBlocked) {
-      return <GeoBlock region={blockedRegion} />;
-  }
-
   return (
     <>
         <Toaster 
@@ -241,6 +275,11 @@ export const App: React.FC = () => {
                 }
             }}
         />
+        {sweepsLocked && (
+            <div className="fixed top-0 left-0 right-0 z-[80] bg-red-950/95 text-red-100 text-xs sm:text-sm text-center px-4 py-2 border-b border-red-800">
+                Sweeps Cash is unavailable{lockedRegion ? ` from ${lockedRegion}` : ''}. Gold Coin games stay open.
+            </div>
+        )}
         <Layout 
             user={user} 
             currency={currency} 
@@ -287,15 +326,19 @@ export const App: React.FC = () => {
                         />
                     )}
 
-                    {activeGame && activeGame.id.includes('bingo') && (
+                    {activeGame && activeGame.id.includes('bingo') && user && (
                         <BingoGame
                             key={`${activeGame.id}-${currency}`}
                             game={activeGame}
                             currency={currency}
-                            balance={user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0}
+                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
                             user={user}
                             onClose={closeGame}
-                            onSpin={(wager, isFreeSpin) => handleGameSpin(wager, isFreeSpin)}
+                            onSettle={async (debit, credit) => {
+                                const result = await supabaseService.game.settle(user, currency, debit, credit, activeGame.id);
+                                setUser(result.user);
+                                return result.credited;
+                            }}
                             isPaused={!sidebarCollapsed}
                             onVisualBalanceChange={setVisualBalanceOverride}
                         />
@@ -328,6 +371,45 @@ export const App: React.FC = () => {
                         />
                     )}
                     
+                    {activeGame && activeGame.id === 'mines' && user && (
+                        <MinesGame
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                            user={user}
+                            onClose={closeGame}
+                            onUpdateUser={setUser}
+                            isPaused={!sidebarCollapsed}
+                        />
+                    )}
+
+                    {activeGame && activeGame.id === 'crash' && user && (
+                        <CrashGame
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                            user={user}
+                            onClose={closeGame}
+                            onUpdateUser={setUser}
+                            isPaused={!sidebarCollapsed}
+                        />
+                    )}
+
+                    {activeGame && activeGame.id === 'roulette' && user && (
+                        <RouletteGame
+                            key={`${activeGame.id}-${currency}`}
+                            game={activeGame}
+                            currency={currency}
+                            balance={currency === CurrencyType.GC ? user.gcBalance : user.scBalance}
+                            user={user}
+                            onClose={closeGame}
+                            onUpdateUser={setUser}
+                            isPaused={!sidebarCollapsed}
+                        />
+                    )}
+
                     {activeGame && activeGame.id.includes('scratch') && user && (
                         <ScratchGame
                             key={`${activeGame.id}-${currency}`}
@@ -339,7 +421,7 @@ export const App: React.FC = () => {
                         />
                     )}
 
-                    {activeGame && !activeGame.id.includes('plinko') && !activeGame.id.includes('bingo') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && (
+                    {activeGame && !activeGame.id.includes('plinko') && !activeGame.id.includes('bingo') && activeGame.id !== 'blackjack' && activeGame.id !== 'video-poker' && !activeGame.id.includes('scratch') && activeGame.id !== 'mines' && activeGame.id !== 'crash' && activeGame.id !== 'roulette' && (
                         <SlotGame 
                             key={`${activeGame.id}-${currency}`}
                             game={activeGame} 

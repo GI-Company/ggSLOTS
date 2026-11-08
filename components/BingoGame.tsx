@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { GameConfig, CurrencyType, WinResult, UserProfile } from '../types';
+import { GameConfig, CurrencyType, UserProfile } from '../types';
 import { WAGER_LEVELS } from '../constants';
 import { supabaseService } from '../services/supabaseService';
 import { GameRulesModal } from './Modals';
@@ -12,7 +12,7 @@ interface BingoGameProps {
   balance: number;
   user: UserProfile | null;
   onClose: () => void;
-  onSpin: (wager: number, isFreeSpin: boolean) => Promise<WinResult>; 
+  onSettle: (debit: number, credit: number) => Promise<number>;
   isPaused: boolean;
   onVisualBalanceChange: (balance: number | null) => void;
 }
@@ -36,7 +36,7 @@ type BotPlayer = {
     isBingo: boolean;
 };
 
-export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, user, onClose, onSpin, isPaused, onVisualBalanceChange }) => {
+export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, user, onClose, onSettle, isPaused, onVisualBalanceChange }) => {
   const [wagerIndex, setWagerIndex] = useState(0); // Default to lower bet
   
   // Card State
@@ -169,31 +169,46 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
   };
 
   const playRound = async () => {
+      if (!user) { toast.error("Sign in to play"); return; }
+      if (activeCards.length === 0) { toast.error("Select at least one card"); return; }
       if (visualBalance < totalBet) { toast.error("Insufficient funds"); return; }
-      
+
       setIsPlaying(true);
       setGamePhase('drawing');
       setDrawnBalls([]);
       setWinAmount(0);
-      setVisualBalance(prev => prev - totalBet);
       setBotWinner(null);
       setBallCallText("");
-      
-      // Reset hits on Player Cards
-      setAllCards(prev => prev.map(c => ({
-          ...c,
-          hits: c.grid.map((row, r) => row.map((cell, col) => (r===2 && col===2)))
-      })));
 
-      // Reset Bots
-      setBots(prev => prev.map(b => ({
-          ...b,
+      try {
+          await onSettle(totalBet, 0);
+      } catch (error: any) {
+          toast.error(error.message || "Could not place the bet");
+          setIsPlaying(false);
+          setGamePhase('idle');
+          return;
+      }
+      setVisualBalance(prev => prev - totalBet);
+
+      let playerCards = allCards.map(card => ({
+          ...card,
+          hits: card.grid.map((row, r) => row.map(() => false))
+      }));
+      playerCards = playerCards.map(card => {
+          const hits = card.hits.map(row => [...row]);
+          hits[2][2] = true;
+          return { ...card, hits };
+      });
+      let botState = bots.map(bot => ({
+          ...bot,
           isBingo: false,
           card: {
-              ...b.card,
-              hits: b.card.grid.map((row, r) => row.map((cell, col) => (r===2 && col===2)))
+              ...bot.card,
+              hits: bot.card.grid.map((row, r) => row.map((_, col) => r === 2 && col === 2))
           }
-      })));
+      }));
+      setAllCards(playerCards);
+      setBots(botState);
 
       // Generate Draw Sequence
       const pool = Array.from({length: 75}, (_, i) => i + 1);
@@ -213,90 +228,59 @@ export const BingoGame: React.FC<BingoGameProps> = ({ game, currency, balance, u
           setCurrentBall(ball);
           setDrawnBalls(prev => [...prev, ball]);
 
-          // 1. Update Player Cards
-          setAllCards(currentPool => currentPool.map(card => {
-              if (!selectedCardIds.includes(card.id)) return card;
-              const newHits = card.hits.map(row => [...row]);
+          const markCard = (card: BingoCardState) => {
+              const hits = card.hits.map(row => [...row]);
               card.grid.forEach((row, r) => {
                   row.forEach((cell, c) => {
-                      if (cell === ball) newHits[r][c] = true;
+                      if (cell === ball) hits[r][c] = true;
                   });
               });
-              return { ...card, hits: newHits };
-          }));
+              return { ...card, hits };
+          };
 
-          // 2. Update Bots
+          playerCards = playerCards.map(card => selectedCardIds.includes(card.id) ? markCard(card) : card);
           let roundEnder = false;
           let winnerName = "";
-
-          setBots(currentBots => currentBots.map(bot => {
-              const newHits = bot.card.hits.map(row => [...row]);
-              bot.card.grid.forEach((row, r) => {
-                  row.forEach((cell, c) => {
-                      if (cell === ball) newHits[r][c] = true;
-                  });
-              });
-              
-              const updatedCard = { ...bot.card, hits: newHits };
+          if (playerCards.some(card => selectedCardIds.includes(card.id) && getLineCount(card) > 0)) {
+              roundEnder = true;
+              winnerName = "You";
+          }
+          botState = botState.map(bot => {
+              const updatedCard = markCard(bot.card);
               const lines = getLineCount(updatedCard);
-              
-              // Bot Win Condition: Any line bingo
               if (lines > 0 && !bot.isBingo) {
+                  if (!roundEnder) winnerName = bot.name;
                   roundEnder = true;
-                  winnerName = bot.name;
                   return { ...bot, card: updatedCard, isBingo: true };
               }
               return { ...bot, card: updatedCard };
-          }));
+          });
+          setAllCards(playerCards.map(card => ({ ...card, hits: card.hits.map(row => [...row]) })));
+          setBots(botState);
 
-          // Wait for draw speed (Slow down the call)
           await new Promise(r => setTimeout(r, DRAW_SPEED_MS));
-
-          // Check if Player hit Bingo (Visual check for early celebration, actual calc is at end of loop usually, but we check per ball for race)
-          // Note: In this implementation, we calculate winnings at the very end to keep logic simple, 
-          // but if a bot wins, we stop the ball draw immediately.
-          
           if (roundEnder) {
               setBotWinner(winnerName);
-              break; // Stop drawing
+              break;
           }
       }
 
-      // --- END ROUND CALCULATIONS ---
-      let totalRoundWin = 0;
-      
-      // Calculate Player Winnings based on final state
-      // Note: We need the LATEST state, so we re-calculate based on drawn balls
-      // Because setAllCards is async inside the loop, we use the `drawSequence` sliced to where we stopped.
-      
-      const ballsActuallyDrawn = drawnBalls; // This might be stale due to closure, let's just rely on visual state + delay
-      
-      // Small delay to let last state settle
-      await new Promise(r => setTimeout(r, 500)); 
+      const calculatedWin = playerCards
+          .filter(card => selectedCardIds.includes(card.id))
+          .reduce((sum, card) => sum + checkPayout(getLineCount(card)), 0);
 
-      // We need to access the latest state, so we use a functional update or just re-calc for safety
-      // For safety, let's re-calculate hits based on drawnBalls state which will be accurate after render
-      
-      setAllCards(finalPool => {
-        // Calculate winnings inside this setter to ensure we have the very last grid state
-        const active = finalPool.filter(c => selectedCardIds.includes(c.id));
-        let calculatedWin = 0;
-        
-        active.forEach(c => {
-             const lines = getLineCount(c);
-             calculatedWin += checkPayout(lines);
-        });
+      if (calculatedWin > 0) {
+          try {
+              const paid = await onSettle(0, calculatedWin);
+              if (paid > 0) {
+                  setWinAmount(paid);
+                  setVisualBalance(prev => prev + paid);
+              }
+          } catch (error: any) {
+              toast.error(error.message || "Win could not be credited");
+          }
+      }
 
-        if (calculatedWin > 0) {
-            setWinAmount(calculatedWin);
-            setVisualBalance(prev => prev + calculatedWin);
-            // Fire and forget server sync
-            onSpin(totalBet, false).catch(e => console.error("Sync error", e)); 
-        }
-
-        return finalPool;
-      });
-      
       setGamePhase('result');
       setIsPlaying(false);
   };

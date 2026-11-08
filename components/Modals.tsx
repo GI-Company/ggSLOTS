@@ -105,8 +105,9 @@ export const GameRulesModal: React.FC<{ onClose: () => void; gameTitle: string }
                     General Info
                 </h4>
                 <ul className="list-disc pl-5 space-y-1 text-slate-400">
-                    <li>RTP (Return to Player): <strong>~96.00%</strong></li>
-                    <li>Volatility: <strong>Variable</strong></li>
+                    <li>Prizes are paid from the shared player pool.</li>
+                    <li>One player can win more than they wagered when other play has funded it.</li>
+                    <li>Total prizes for all players never exceed total wagers.</li>
                     <li>Malfunction voids all pays and plays.</li>
                 </ul>
             </div>
@@ -115,7 +116,7 @@ export const GameRulesModal: React.FC<{ onClose: () => void; gameTitle: string }
                  <h4 className="text-white font-bold text-lg mb-2">Sweeps Cash (SC) Mode</h4>
                  <div className="bg-gradient-to-r from-green-900/20 to-slate-800 p-4 rounded-xl border border-green-900/50">
                     <p className="mb-2 text-green-100"><strong>1.00 SC = $1.00 USD</strong> for redemption.</p>
-                    <p className="text-xs text-green-200/70">SC must be played through 1x before redemption.</p>
+                    <p className="text-xs text-green-200/70">SC must be played through 1x before redemption. Cash paid out to all players cannot exceed the purchases those players made. A single player can cash out more than they personally spent when other purchases cover it.</p>
                  </div>
             </div>
         </div>
@@ -197,7 +198,7 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
     const isGuest = !user || user.isGuest;
 
     const handleSelectPkg = async (pkg: CoinPackage) => { 
-        if (isGuest) {
+        if (isGuest || !user) {
             toast('Purchasing requires a verified account.', { icon: '🔒', duration: 4000 });
             onRegister();
             return;
@@ -206,14 +207,12 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
         setSelectedPkg(pkg);
         setIsLoading(true);
         try {
-            // Call our new secure payment service that triggers the Edge Function
-            const response = await paymentService.createInvoice(pkg.id, pkg.price);
-            setInvoiceUrl(response.invoice_url);
-            setStep('payment_pending');
+            const response = await paymentService.createCheckout(pkg.id, user.id);
+            if (!response.url) throw new Error('Stripe did not return a checkout page.');
+            window.location.href = response.url;
         } catch (e: any) {
             toast.error(e.message || "Failed to initiate payment");
             setStep('select');
-        } finally {
             setIsLoading(false);
         }
     };
@@ -273,6 +272,12 @@ export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | 
                         </div>
                     ))}
                  </div>
+            )}
+
+            {step === 'select' && (
+                <p className="text-[11px] text-slate-500 text-center">
+                    Checkout is Stripe-hosted. You are buying Gold Coins. Sweeps Cash shown here is a free promotional entry, not the product being charged.
+                </p>
             )}
 
             {step === 'payment_pending' && selectedPkg && invoiceUrl && (

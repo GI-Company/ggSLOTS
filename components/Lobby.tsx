@@ -114,6 +114,27 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
                 </div>
             )}
 
+            {!searchQuery && selectedCategory === 'All' && (
+                <div className="grid md:grid-cols-3 gap-4">
+                    {GAMES_LIST.filter(game => ['mines', 'crash', 'roulette'].includes(game.id)).map(game => (
+                        <button
+                            key={game.id}
+                            onClick={() => onPlayGame(game)}
+                            className="text-left rounded-2xl border border-slate-800 bg-slate-900/80 p-5 hover:border-indigo-400 hover:-translate-y-1 transition-all"
+                        >
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-indigo-300 mb-2">Advanced original</div>
+                            <div className="text-3xl mb-2">{game.id === 'mines' ? '💎' : game.id === 'crash' ? '🚀' : '🎡'}</div>
+                            <h3 className="text-white font-black text-2xl font-display">{game.title}</h3>
+                            <p className="text-slate-400 text-sm mt-1">
+                                {game.id === 'mines' && 'Open gems on a 5×5 field and cash out before a mine.'}
+                                {game.id === 'crash' && 'A rocket climbs. Cash out before the hidden break.'}
+                                {game.id === 'roulette' && 'European wheel. Inside bets, dozens, and columns.'}
+                            </p>
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Game Grid Controls */}
             <div className="space-y-6">
                 <div className="flex flex-col md:flex-row items-center justify-between border-b border-slate-800 pb-4 gap-4">
@@ -170,7 +191,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onPlayGame, isLoggedIn, onRegister
                                     {/* Icon / Placeholder Art */}
                                     <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-0">
                                         <div className="text-5xl mb-4 transform group-hover:scale-110 transition-transform duration-300 drop-shadow-md">
-                                            {game.id.includes('poker') ? '🃏' : game.id.includes('black') ? '♠️' : game.id.includes('plinko') ? '🟣' : game.id.includes('scratch') ? '🎟️' : game.id.includes('bingo') ? '🎱' : '🎰'}
+                                            {game.id === 'mines' ? '💎' : game.id === 'crash' ? '🚀' : game.id === 'roulette' ? '🎡' : game.id.includes('poker') ? '🃏' : game.id.includes('black') ? '♠️' : game.id.includes('plinko') ? '🟣' : game.id.includes('scratch') ? '🎟️' : game.id.includes('bingo') ? '🎱' : '🎰'}
                                         </div>
                                         <h4 className="text-white font-black text-xl font-display leading-tight drop-shadow-md line-clamp-2">{game.title}</h4>
                                     </div>

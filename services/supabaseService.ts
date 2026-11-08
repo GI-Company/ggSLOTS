@@ -1,5 +1,7 @@
 
-import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket, KycStatus, PokerState } from '../types';
+import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, Card, BlackjackState, ScratchTicket, KycStatus, PokerState, MinesState, CrashState, RouletteBet, RouletteResult } from '../types';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
+import { localCasino } from './localCasino';
 import { REDEMPTION_UNLOCK_PRICE, GAME_DATA, PAYLINES } from '../constants';
 import { supabase } from '../lib/supabaseClient';
 import { complianceService } from './complianceService';
@@ -155,7 +157,7 @@ const calculateSpinResult = (wager: number, currency: CurrencyType, gameId: stri
     };
 };
 
-export const supabaseService = {
+const remoteService = {
   auth: {
       signInAsGuest: async (): Promise<{ user: UserProfile, message?: string }> => {
         if (!supabase) throw new Error("Supabase Client not initialized.");
@@ -283,7 +285,21 @@ export const supabaseService = {
 
         return { user: validateData(UserProfileSchema, mapProfile(updatedProfile), 'SpinUpdate') as UserProfile, result: validateData(WinResultSchema, math.result, 'SpinResult') };
     },
-    buyScratchTicket: async (user: UserProfile, currency: CurrencyType): Promise<{ user: UserProfile, result: WinResult }> => {
+    settle: async (user: UserProfile, currency: CurrencyType, debit: number, credit: number, activityId: string): Promise<UserProfile> => {
+        if (!supabase) throw new Error("No client");
+        const { error } = await supabase.rpc('execute_atomic_transaction', {
+            game_type: activityId,
+            currency,
+            wager_amount: debit,
+            payout_amount: credit,
+            outcome_data: { activityId, debit, credit }
+        });
+        if (error) throw error;
+        const { data: updatedProfile, error: fetchError } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (fetchError) throw fetchError;
+        return { user: validateData(UserProfileSchema, mapProfile(updatedProfile), 'Settle') as UserProfile, credited: credit };
+    },
+    buyScratchTicket: async (user: UserProfile, currency: CurrencyType, _gameId = 'scratch'): Promise<{ user: UserProfile, result: WinResult }> => {
         if (!supabase) throw new Error("No client");
         if (currency === CurrencyType.SC) { const geoCheck = await complianceService.verifyLocation(); if (!geoCheck.allowed) throw new Error(`Location Blocked: ${geoCheck.reason}`); }
         
@@ -371,6 +387,11 @@ export const supabaseService = {
          const { data, error } = await supabase.rpc('blackjack_double', { game_id: gameId });
          if (error) throw error;
          return { game: data.game, user: mapProfile(data.profile) };
+    },
+    split: async (gameId: string, user: UserProfile) => {
+         const { data, error } = await supabase.rpc('blackjack_split', { game_id: gameId });
+         if (error) throw error;
+         return { game: data.game, user: mapProfile(data.profile) };
     }
   },
   poker: {
@@ -385,8 +406,35 @@ export const supabaseService = {
           return { game: data.game, user: mapProfile(data.profile) };
       }
   },
+  mines: {
+    start: async (_user: UserProfile, _wager: number, _currency: CurrencyType, _mines: number): Promise<{ game: MinesState; user: UserProfile }> => {
+      throw new Error('Nebula Mines uses the shared player pool on this device.');
+    },
+    reveal: async (_gameId: string, _index: number, _user: UserProfile): Promise<{ game: MinesState; user: UserProfile }> => {
+      throw new Error('Nebula Mines uses the shared player pool on this device.');
+    },
+    cashout: async (_gameId: string, _user: UserProfile): Promise<{ game: MinesState; user: UserProfile }> => {
+      throw new Error('Nebula Mines uses the shared player pool on this device.');
+    }
+  },
+  crash: {
+    start: async (_user: UserProfile, _wager: number, _currency: CurrencyType): Promise<{ game: CrashState; user: UserProfile }> => {
+      throw new Error('Orbit Crash uses the shared player pool on this device.');
+    },
+    peek: async (_gameId: string, _user: UserProfile): Promise<{ game: CrashState; user: UserProfile }> => {
+      throw new Error('Orbit Crash uses the shared player pool on this device.');
+    },
+    cashout: async (_gameId: string, _user: UserProfile): Promise<{ game: CrashState; user: UserProfile }> => {
+      throw new Error('Orbit Crash uses the shared player pool on this device.');
+    }
+  },
+  roulette: {
+    spin: async (_user: UserProfile, _currency: CurrencyType, _bets: RouletteBet[]): Promise<{ result: RouletteResult; user: UserProfile }> => {
+      throw new Error('Solar Roulette uses the shared player pool on this device.');
+    }
+  },
   db: {
-    purchasePackage: async (price: number, gcAmount: number, scAmount: number): Promise<UserProfile> => {
+    purchasePackage: async (price: number, gcAmount: number, scAmount: number, _sessionId?: string): Promise<UserProfile> => {
         if (!supabase) throw new Error("No client");
         const { error } = await supabase.rpc('purchase_package', { price, gc_amount: gcAmount, sc_amount: scAmount });
         if (error) throw error;
@@ -404,3 +452,24 @@ export const supabaseService = {
     }
   }
 };
+
+let preferLocal = true;
+
+/** Use Supabase only when the project key is set and the profiles table is actually there. */
+export async function prepareCasinoBackend(): Promise<'local' | 'remote'> {
+    if (!supabase) {
+        preferLocal = true;
+        return 'local';
+    }
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    const tableExists = !error || error.code === '42501';
+    preferLocal = !tableExists;
+    return preferLocal ? 'local' : 'remote';
+}
+
+export const supabaseService = new Proxy(remoteService, {
+    get(target, prop, receiver) {
+        if (preferLocal || !isSupabaseConfigured) return (localCasino as typeof remoteService)[prop as keyof typeof remoteService];
+        return Reflect.get(target, prop, receiver);
+    }
+});
