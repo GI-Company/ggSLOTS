@@ -120,6 +120,9 @@ export interface BlackjackState {
   wager: number;
   currency: CurrencyType;
   payout: number;
+  hands?: Card[][];
+  handBets?: number[];
+  activeHand?: number;
 }
 
 // --- POKER TYPES ---
@@ -143,4 +146,45 @@ export interface ScratchTicket {
     isWin: boolean;
     cost: number;
     tier: 'jackpot' | 'high' | 'mid' | 'low' | 'loser';
+}
+
+export interface MinesState {
+    id: string;
+    wager: number;
+    currency: CurrencyType;
+    mines: number;
+    mineSet: number[];
+    revealed: number[];
+    status: 'active' | 'cashed' | 'bust';
+    multiplier: number;
+    payout: number;
+    payable?: number;
+}
+
+export interface CrashState {
+    id: string;
+    wager: number;
+    currency: CurrencyType;
+    startedAt: number;
+    crashAt: number;
+    status: 'active' | 'cashed' | 'bust';
+    multiplier: number;
+    payout: number;
+    payable?: number;
+}
+
+export type RouletteBet =
+    | { kind: 'straight'; number: number; amount: number }
+    | { kind: 'color'; color: 'red' | 'black'; amount: number }
+    | { kind: 'parity'; parity: 'odd' | 'even'; amount: number }
+    | { kind: 'half'; half: 'low' | 'high'; amount: number }
+    | { kind: 'dozen'; dozen: 1 | 2 | 3; amount: number }
+    | { kind: 'column'; column: 1 | 2 | 3; amount: number };
+
+export interface RouletteResult {
+    number: number;
+    color: 'red' | 'black' | 'green';
+    wager: number;
+    payout: number;
+    bets: RouletteBet[];
 }

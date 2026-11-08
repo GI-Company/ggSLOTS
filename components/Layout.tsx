@@ -33,12 +33,6 @@ export const Layout: React.FC<LayoutProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleCurrencyToggle = () => { 
-      // Toggle logic
-      const next = currency === CurrencyType.GC ? CurrencyType.SC : CurrencyType.GC;
-      setCurrency(next);
-  };
-
   const NavItem = ({ view, label, icon }: { view: ViewType, label: string, icon: React.ReactNode }) => {
     const isActive = currentView === view;
     const showLabel = isMobile || !sidebarCollapsed;
@@ -69,17 +63,10 @@ export const Layout: React.FC<LayoutProps> = ({
     : (user ? (currency === CurrencyType.GC ? user.gcBalance : user.scBalance) : 0);
 
   const CurrencyToggle = ({ className = "" }: { className?: string }) => (
-    <div 
-        className={`relative inline-flex bg-slate-950 p-1 rounded-full border border-slate-700 shadow-inner group transition-colors cursor-pointer ${className}`}
-        onClick={handleCurrencyToggle}
-        title={`Switch to ${currency === CurrencyType.GC ? 'Sweeps Cash' : 'Gold Coins'}`}
-    >
-            <div className={`w-14 h-8 rounded-full bg-gradient-to-br transition-all duration-300 shadow-lg ${currency === CurrencyType.GC ? 'from-yellow-400 to-yellow-600 translate-x-0' : 'from-green-400 to-green-600 translate-x-full'}`}></div>
-            <div className="absolute inset-0 flex justify-between items-center px-2 text-[11px] font-black pointer-events-none select-none w-full box-border pr-3 pl-3">
-                <span className={`z-10 transition-colors ${currency === CurrencyType.GC ? 'text-slate-900' : 'text-slate-500'}`}>GC</span>
-                <span className={`z-10 transition-colors ${currency === CurrencyType.SC ? 'text-slate-900' : 'text-slate-500'}`}>SC</span>
-            </div>
-    </div>
+    <span title="Gold Coins are demonstration credits with no monetary value"
+        className={`inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-300 ${className}`}>
+        GC · DEMO
+    </span>
   );
 
   return (
@@ -159,7 +146,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 <div className="space-y-1">
                     {(isMobile || !sidebarCollapsed) && <p className="px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Account</p>}
                     <NavItem view="get-coins" label="Cashier" icon={<svg className="w-5 h-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-                    <NavItem view="redeem" label="Redeem" icon={<svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
+                    <NavItem view="redeem" label="Prizes Unavailable" icon={<svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
                     <NavItem view="history" label="History" icon={<svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
                 </div>
             </nav>
@@ -307,8 +294,8 @@ export const Layout: React.FC<LayoutProps> = ({
                         </div>
                     </div>
                     <div className="max-w-4xl mx-auto mt-8 text-center text-[10px] text-slate-600 leading-relaxed">
-                        NO PURCHASE NECESSARY to enter Sweepstakes. VOID WHERE PROHIBITED BY LAW. 
-                        GGSlots is a social casino. Gold Coins have no monetary value. Sweeps Cash can be redeemed for real prizes subject to terms and verification.
+                        FREE-PLAY PREVIEW. NO PURCHASES, CASH PRIZES OR SWEEPSTAKES ARE AVAILABLE. 
+                        GGSlots currently provides demonstration games only. All balances are local demo credits with no monetary value or redemption rights.
                         Available only in US & Canada (Excluding WA, MI, MT, CA, NY, CT, NV, LA, NJ).
                         Must be 18+ to play.
                     </div>

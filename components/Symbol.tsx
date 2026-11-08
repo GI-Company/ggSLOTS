@@ -4,6 +4,21 @@ import React from 'react';
 export const Symbol: React.FC<{ name: string; className?: string }> = ({ name, className = "" }) => {
     
     // --- SPECIALS ---
+    if (name === 'WILD') {
+        return (
+            <svg viewBox="0 0 100 100" className={className}>
+                <defs>
+                    <linearGradient id="wildGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="#fde68a" />
+                        <stop offset="100%" stopColor="#f59e0b" />
+                    </linearGradient>
+                </defs>
+                <rect x="8" y="8" width="84" height="84" rx="16" fill="url(#wildGrad)" stroke="#78350f" strokeWidth="4" />
+                <text x="50" y="58" fontSize="22" fontFamily="Arial" fontWeight="900" textAnchor="middle" fill="#451a03">WILD</text>
+            </svg>
+        );
+    }
+
     if (name === 'SCATTER') {
         return (
             <svg viewBox="0 0 100 100" className={className}>

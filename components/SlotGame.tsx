@@ -45,7 +45,11 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
   const reelStrips = gameAssets.strips;
 
   // Background style from config or fallback
-  const backgroundStyle = game.style?.background ? { backgroundImage: `url(${game.style.background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { backgroundColor: '#0f172a' };
+  const backgroundStyle = game.style?.background
+    ? (game.style.background.includes('gradient')
+        ? { background: game.style.background }
+        : { backgroundImage: `url(${game.style.background})`, backgroundSize: 'cover', backgroundPosition: 'center' })
+    : { backgroundColor: '#0f172a' };
   const accentColor = game.style?.accentColor || '#6366f1';
 
   // Sync Balance
@@ -199,7 +203,7 @@ export const SlotGame: React.FC<SlotGameProps> = ({ game, currency, balance, use
             {/* DEMO / GUEST BANNER */}
             {(user?.isGuest || currency === 'GC') && (
                 <div className="bg-yellow-500/90 text-black text-[10px] sm:text-xs font-bold text-center py-1 uppercase tracking-widest z-30">
-                    {user?.isGuest ? "GUEST MODE - PROGRESS NOT SAVED" : "FUN PLAY MODE - NO REAL PRIZES"}
+                    {user?.isGuest ? "GUEST MODE - SAVED ON THIS DEVICE" : "FUN PLAY MODE - NO CASH PRIZES"}
                 </div>
             )}
 

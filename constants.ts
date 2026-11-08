@@ -1,5 +1,19 @@
 
 import { GameConfig, CoinPackage } from './types';
+import coinPackages from './shared/coin-packages.json';
+
+/** Stable catalog RNG so the lobby does not reshuffle on every refresh. */
+function mulberry32(seed: number) {
+    let a = seed >>> 0;
+    return () => {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+const rng = mulberry32(0x651075);
 
 export const REEL_COUNT = 3;
 
@@ -20,16 +34,7 @@ export const WAGER_LEVELS = {
 // Plinko Constants
 export const PLINKO_ROWS = 16; // Max rows supported by UI/Logic
 
-export const COIN_PACKAGES: CoinPackage[] = [ 
-  { id: 'pkg_50', price: 50.00, gcAmount: 50000, scAmount: 52.00, isBestValue: false },
-  { id: 'pkg_75', price: 75.00, gcAmount: 80000, scAmount: 78.00, isBestValue: false },
-  { id: 'pkg_100', price: 100.00, gcAmount: 110000, scAmount: 105.00, isBestValue: true },
-  { id: 'pkg_250', price: 250.00, gcAmount: 300000, scAmount: 260.00, isBestValue: false },
-  { id: 'pkg_500', price: 500.00, gcAmount: 650000, scAmount: 520.00, isBestValue: false },
-  { id: 'pkg_750', price: 750.00, gcAmount: 1000000, scAmount: 780.00, isBestValue: false },
-  { id: 'pkg_1000', price: 1000.00, gcAmount: 1500000, scAmount: 1050.00, isBestValue: false },
-  { id: 'pkg_5000', price: 5000.00, gcAmount: 8000000, scAmount: 5250.00, isBestValue: false }
-];
+export const COIN_PACKAGES: CoinPackage[] = coinPackages;
 
 export const REDEMPTION_UNLOCK_PRICE = 49.99; // Adjusted for higher tiers
 export const MIN_REDEMPTION = 50.00;
@@ -64,23 +69,26 @@ const generateStrips = (symbols: string[], volatility: 'Low' | 'Medium' | 'High'
 
     for(let r=0; r<3; r++) {
         for(let i=0; i<len; i++) {
-            const rand = Math.random();
+            const roll = rng();
+            if (roll < 0.035) {
+                strips[r].push('WILD');
+                continue;
+            }
             let symIndex = 0;
-            
+
             if (volatility === 'High') {
-                if (rand < 0.04) symIndex = 7; // Scatter (Very Rare)
-                else if (rand < 0.10) symIndex = 6; // Jackpot Symbol
-                else if (rand < 0.20) symIndex = 5;
-                else symIndex = Math.floor(Math.random() * 5); // Low symbols mostly
+                if (roll < 0.07) symIndex = 7;
+                else if (roll < 0.13) symIndex = 6;
+                else if (roll < 0.22) symIndex = 5;
+                else symIndex = Math.floor(rng() * 5);
             } else if (volatility === 'Medium') {
-                 if (rand < 0.08) symIndex = 7; // Scatter
-                 else if (rand < 0.18) symIndex = 6;
-                 else symIndex = Math.floor(Math.random() * 6);
+                 if (roll < 0.11) symIndex = 7;
+                 else if (roll < 0.20) symIndex = 6;
+                 else symIndex = Math.floor(rng() * 6);
             } else {
-                 // Low Volatility: More balanced
-                 if (rand < 0.12) symIndex = 7; // Scatter (Common)
-                 else if (rand < 0.25) symIndex = 6;
-                 else symIndex = Math.floor(Math.random() * 6);
+                 if (roll < 0.15) symIndex = 7;
+                 else if (roll < 0.28) symIndex = 6;
+                 else symIndex = Math.floor(rng() * 6);
             }
             strips[r].push(symbols[symIndex]);
         }
@@ -98,6 +106,7 @@ const generatePayouts = (symbols: string[], volatility: 'Low' | 'Medium' | 'High
         [symbols[4]]: 15 * mult,
         [symbols[5]]: 40 * mult,
         [symbols[6]]: 150 * mult, // Jackpot Symbol
+        'WILD': 80 * mult,
         'SCATTER': 0
     };
 };
@@ -110,6 +119,11 @@ const BASE_GAME_DATA: Record<string, GameData> = {
 
 // Initial List with Categories
 const INITIAL_GAMES_LIST: GameConfig[] = [
+  // --- ADVANCED ORIGINALS ---
+  { id: 'mines', title: 'Nebula Mines', image: '', tag: 'New', category: 'Instant', volatility: 'High', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'Pool', isDemo: true },
+  { id: 'crash', title: 'Orbit Crash', image: '', tag: 'New', category: 'Instant', volatility: 'High', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'Pool', isDemo: true },
+  { id: 'roulette', title: 'Solar Roulette', image: '', tag: 'New', category: 'Table', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x35', isDemo: true },
+
   // --- TABLE GAMES ---
   { id: 'blackjack', title: 'Cosmic Blackjack', image: '', tag: 'Table', category: 'Table', volatility: 'Low', minWager: '100 GC', maxWager: '500k GC', maxMultiplier: 'x2.5', isDemo: true },
   { id: 'video-poker', title: 'Jacks or Better', image: '', tag: 'Table', category: 'Table', volatility: 'Medium', minWager: '100 GC', maxWager: '50k GC', maxMultiplier: 'x800', isDemo: true },
@@ -119,12 +133,12 @@ const INITIAL_GAMES_LIST: GameConfig[] = [
   { id: 'plinko', title: 'Plinko Classic', image: '', tag: 'Original', category: 'Instant', volatility: 'Variable', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x1,000', isDemo: true },
   { id: 'plinko-x', title: 'Plinko X', image: '', tag: 'High Risk', category: 'Instant', volatility: 'High', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x10,000', isDemo: true },
   { id: 'plinko-party', title: 'Plinko Party', image: '', tag: 'Fun', category: 'Instant', volatility: 'Low', minWager: '100 GC', maxWager: '10M GC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: '1 SC', maxMultiplier: 'x2,000', isDemo: true },
-  { id: 'scratch-777', title: 'Lucky 7s', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '1k GC', maxWager: '5 SC', maxMultiplier: 'x5,000', isDemo: true },
-  { id: 'scratch-gold', title: 'Gold Rush', image: '', tag: 'Instant', category: 'Instant', volatility: 'Medium', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x1,000', isDemo: true },
-  { id: 'scratch-neon', title: 'Neon Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Low', minWager: '200 GC', maxWager: '1 SC', maxMultiplier: 'x500', isDemo: true },
-  { id: 'scratch-zombie', title: 'Zombie Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '500 GC', maxWager: '2 SC', maxMultiplier: 'x10,000', isDemo: true },
-  { id: 'scratch-diamond', title: 'Diamond Dreams', image: '', tag: 'Instant', category: 'Instant', volatility: 'Very High', minWager: '2k GC', maxWager: '10 SC', maxMultiplier: 'x20,000', isDemo: true },
+  { id: 'scratch-cosmic', title: 'Cosmic Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Variable', minWager: '500 GC', maxWager: 'GC demo only', maxMultiplier: 'x2,000', isDemo: true },
+  { id: 'scratch-777', title: 'Lucky 7s', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '1k GC', maxWager: 'GC demo only', maxMultiplier: 'x5,000', isDemo: true },
+  { id: 'scratch-gold', title: 'Gold Rush', image: '', tag: 'Instant', category: 'Instant', volatility: 'Medium', minWager: '500 GC', maxWager: 'GC demo only', maxMultiplier: 'x1,000', isDemo: true },
+  { id: 'scratch-neon', title: 'Neon Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'Low', minWager: '200 GC', maxWager: 'GC demo only', maxMultiplier: 'x500', isDemo: true },
+  { id: 'scratch-zombie', title: 'Zombie Scratch', image: '', tag: 'Instant', category: 'Instant', volatility: 'High', minWager: '500 GC', maxWager: 'GC demo only', maxMultiplier: 'x10,000', isDemo: true },
+  { id: 'scratch-diamond', title: 'Diamond Dreams', image: '', tag: 'Instant', category: 'Instant', volatility: 'Very High', minWager: '2k GC', maxWager: 'GC demo only', maxMultiplier: 'x20,000', isDemo: true },
 
   // --- SLOTS ---
   { id: 'cosmic-cash', title: 'Cosmic Cash', image: '', tag: 'Popular', category: 'Slots', volatility: 'Medium', minWager: '100 GC', maxWager: '100k GC', maxMultiplier: 'x1,200', isDemo: true, style: { background: 'linear-gradient(to bottom, #1e1b4b, #312e81, #0f172a)', accentColor: '#6366f1' } },
@@ -157,14 +171,13 @@ const generateGames = () => {
 
     // Generate 50 Unique Slots
     for (let i = 0; i < 50; i++) {
-        const theme = themes[Math.floor(Math.random() * themes.length)];
-        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+        const theme = themes[Math.floor(rng() * themes.length)];
+        const adj = adjectives[Math.floor(rng() * adjectives.length)];
+        const noun = nouns[Math.floor(rng() * nouns.length)];
         const title = `${adj} ${noun}`;
-        const id = title.toLowerCase().replace(' ', '-');
-        
-        // Volatility Randomizer
-        const vol = Math.random() > 0.6 ? 'High' : (Math.random() > 0.3 ? 'Medium' : 'Low');
+        const id = `${adj}-${noun}-${theme.id}-${i}`.toLowerCase();
+
+        const vol = rng() > 0.6 ? 'High' : (rng() > 0.3 ? 'Medium' : 'Low');
         const maxMult = vol === 'High' ? 'x5,000' : (vol === 'Medium' ? 'x2,000' : 'x800');
 
         // Config
@@ -178,7 +191,7 @@ const generateGames = () => {
             minWager: '100 GC',
             maxWager: '100k GC',
             maxMultiplier: maxMult,
-            isDemo: Math.random() > 0.5, // 50% are unlocked for guest
+            isDemo: rng() > 0.35,
             style: {
                 background: `linear-gradient(to bottom, ${theme.bg[0]}, ${theme.bg[1]}, #020617)`,
                 accentColor: theme.bg[1],

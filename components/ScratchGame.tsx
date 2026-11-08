@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameConfig, CurrencyType, ScratchTicket, UserProfile } from '../types';
 import { supabaseService } from '../services/supabaseService';
+import { SCRATCH_RULES } from '../lib/engine';
 import toast from 'react-hot-toast';
 
 interface ScratchGameProps {
@@ -199,7 +200,7 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
       setLoading(true);
       setTicket(null);
       try {
-          const { user: updatedUser, result } = await supabaseService.game.buyScratchTicket(user, currencyMode);
+          const { user: updatedUser, result } = await supabaseService.game.buyScratchTicket(user, currencyMode, game.id);
           onUpdateUser(updatedUser);
           setTicket(result.scratchOutcome || null);
       } catch (e: any) {
@@ -219,7 +220,7 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
              {/* DEMO / GUEST BANNER */}
              {(user.isGuest || currencyMode === 'GC') && (
                 <div className="absolute top-0 left-0 right-0 bg-yellow-500/90 text-black text-[10px] sm:text-xs font-bold text-center py-1 uppercase tracking-widest z-30">
-                    {user.isGuest ? "GUEST MODE - PROGRESS NOT SAVED" : "FUN PLAY MODE - NO REAL PRIZES"}
+                    {user.isGuest ? "GUEST MODE - SAVED ON THIS DEVICE" : "FUN PLAY MODE - NO CASH PRIZES"}
                 </div>
              )}
 
@@ -261,17 +262,12 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
                             >
                                 GOLD COINS
                             </button>
-                            <div className="relative ml-1">
-                                <button 
-                                    disabled
-                                    className="px-6 sm:px-8 py-2 sm:py-3 rounded-full font-bold transition-all text-slate-700 bg-slate-900 border border-slate-800 cursor-not-allowed text-sm sm:text-base"
-                                >
-                                    SWEEPS CASH
-                                </button>
-                                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-tighter shadow-sm border border-red-400 rotate-12">
-                                    SOON
-                                </div>
-                            </div>
+                            <button
+                                onClick={() => setCurrencyMode(CurrencyType.SC)}
+                                className={`px-6 sm:px-8 py-2 sm:py-3 rounded-full font-bold transition-all text-sm sm:text-base ${currencyMode === 'SC' ? 'bg-green-500 text-black shadow-lg shadow-green-500/40' : 'text-slate-500 hover:text-white'}`}
+                            >
+                                SWEEPS CASH
+                            </button>
                          </div>
 
                          <div className={`
@@ -282,7 +278,9 @@ export const ScratchGame: React.FC<ScratchGameProps> = ({ game, user, onClose, o
                              <div className="text-center">
                                  <div className="text-xs sm:text-sm font-bold uppercase text-slate-400 mb-1">Ticket Cost</div>
                                  <div className={`text-3xl sm:text-4xl font-black font-display ${currencyMode === 'GC' ? 'text-yellow-400' : 'text-green-400'}`}>
-                                     {currencyMode === 'GC' ? '500 GC' : '1.00 SC'}
+                                     {currencyMode === 'GC'
+                                        ? `${(SCRATCH_RULES[game.id]?.gc || 500).toLocaleString()} GC`
+                                        : `${(SCRATCH_RULES[game.id]?.sc || 1).toFixed(2)} SC`}
                                  </div>
                              </div>
 
