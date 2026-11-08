@@ -2,11 +2,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { UserProfile, CurrencyType, ViewType, GameConfig, WinResult } from './types';
 import { supabaseService, prepareCasinoBackend } from './services/supabaseService';
-import { geoService } from './services/geoService';
-import { paymentService } from './services/paymentService';
 import { Layout } from './components/Layout';
 import { Lobby } from './components/Lobby';
-import { AuthModal, GetCoinsModal, RedeemModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
+import { AuthModal, GetCoinsModal, HistoryModal, SweepstakesRulesModal, KycModal } from './components/Modals';
 import { TermsModal, PrivacyModal, ResponsibleGamingModal } from './components/Legal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import toast, { Toaster } from 'react-hot-toast';
@@ -42,8 +40,7 @@ export const App: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   
   // Compliance & Legal
-  const [sweepsLocked, setSweepsLocked] = useState(false);
-  const [lockedRegion, setLockedRegion] = useState<string | undefined>(undefined);
+  const sweepsLocked = true; // Free-play safety lock: no SC, purchasing, or redemption.
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | 'responsible' | null>(null);
 
   // App-level control of sidebar state to handle game pausing/collapsing
@@ -68,30 +65,11 @@ export const App: React.FC = () => {
             toast('Checkout canceled');
             window.history.replaceState({}, '', window.location.pathname);
         } else if (checkout === 'success' && sessionId) {
-            try {
-                const result = await paymentService.confirm(sessionId);
-                if (result.credit) {
-                    const updated = await supabaseService.db.purchasePackage(result.price, result.gcAmount, result.scAmount, sessionId);
-                    if (!cancel) setUser(updated);
-                    toast.success('Gold Coins added to your balance.');
-                } else if (result.alreadyFulfilled) {
-                    toast.success('That payment was already applied.');
-                } else {
-                    toast('Payment is still processing. Refresh after Stripe marks it paid.');
-                }
-            } catch (error: any) {
-                toast.error(error.message || 'Could not confirm the Stripe payment');
-            }
+            toast.error('Payments are paused. If you were charged, contact GGSlots support with your receipt.');
             window.history.replaceState({}, '', window.location.pathname);
         }
     })();
 
-    geoService.checkCompliance().then(status => {
-        if (!status.allowed) {
-            setSweepsLocked(true);
-            setLockedRegion(status.region || status.country);
-        }
-    });
     return () => { cancel = true; };
   }, []);
 
@@ -145,12 +123,6 @@ export const App: React.FC = () => {
     toast.success("Logged out successfully");
   };
 
-  const handleRedeem = async (amount: number) => {
-    if (!user || user.isGuest) return;
-    const updatedUser = await supabaseService.db.redeem(amount);
-    setUser(updatedUser);
-    toast.success(`Redemption request for ${amount.toFixed(2)} SC submitted!`);
-  };
 
   const handleKycUpdate = async (status: 'pending') => {
       if (!user) return;
@@ -187,15 +159,10 @@ export const App: React.FC = () => {
     }
     
     if (currentView === 'redeem') {
-        if (!user || user.isGuest) return <div className="p-8 text-center text-white">Please login to redeem.</div>;
-        return (
-            <RedeemModal 
-                onClose={() => setCurrentView('main')} 
-                user={user} 
-                onRedeem={handleRedeem} 
-                onOpenKyc={() => setShowKyc(true)}
-            />
-        );
+        return <div className="p-8 text-center text-white" role="status">
+            <h2 className="text-2xl font-bold mb-3">Prize redemption unavailable</h2>
+            <p className="text-slate-300">GGSlots is currently a free-play preview. Demo balances have no cash value and cannot be redeemed.</p>
+        </div>;
     }
 
     if (currentView === 'promotions') {
@@ -209,11 +176,11 @@ export const App: React.FC = () => {
                     </div>
                     <div className="bg-slate-800 p-6 rounded-xl border border-green-500/30">
                         <h3 className="text-xl text-green-400 font-bold mb-2">Sign Up Bonus</h3>
-                        <p className="text-slate-300">New players receive <span className="text-white font-bold">20.00 SC</span> instantly upon registration.</p>
+                        <p className="text-slate-300">Play free Gold Coin games as a guest. Account registration and Sweeps Cash are not currently offered.</p>
                     </div>
                      <div className="bg-slate-800 p-6 rounded-xl border border-indigo-500/30">
                         <h3 className="text-xl text-white font-bold mb-2">Mail-In Entry (AMO)</h3>
-                        <p className="text-slate-300 text-sm">Send a handwritten 3x5 card to receive 5.00 SC. See <button onClick={() => setCurrentView('sweeps-rules')} className="text-indigo-400 underline">Official Rules</button> for details.</p>
+                        <p className="text-slate-300 text-sm">Sweepstakes entries and prize promotions are not active in this free-play preview.</p>
                     </div>
                 </div>
             </div>
@@ -276,14 +243,14 @@ export const App: React.FC = () => {
             }}
         />
         {sweepsLocked && (
-            <div className="fixed top-0 left-0 right-0 z-[80] bg-red-950/95 text-red-100 text-xs sm:text-sm text-center px-4 py-2 border-b border-red-800">
-                Sweeps Cash is unavailable{lockedRegion ? ` from ${lockedRegion}` : ''}. Gold Coin games stay open.
+            <div role="status" className="fixed top-0 left-0 right-0 z-[80] bg-amber-950/95 text-amber-100 text-xs sm:text-sm text-center px-4 py-2 border-b border-amber-800">
+                FREE-PLAY PREVIEW — Gold Coins are demo credits with no cash value. Purchases, Sweeps Cash and redemptions are disabled.
             </div>
         )}
         <Layout 
             user={user} 
             currency={currency} 
-            setCurrency={setCurrency} 
+            setCurrency={(next) => next === CurrencyType.GC ? setCurrency(next) : toast.error('Sweeps Cash is unavailable in free-play preview.')} 
             currentView={currentView}
             setView={setCurrentView}
             onLogin={() => setAuthModalType('login')}

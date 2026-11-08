@@ -19,6 +19,13 @@ function stripeClient() {
   return new Stripe(key, { apiVersion: '2026-09-30.endive' });
 }
 
+function assertCommerceDisabled() {
+  const error = new Error('GGSlots is currently free-play only. Paid checkout and sweepstakes settlement are disabled.');
+  error.status = 503;
+  error.code = 'COMMERCE_DISABLED';
+  throw error;
+}
+
 function integrationLabel() {
   const suffix = randomBytes(6).toString('hex').slice(0, 8);
   return `ggslots_coin_store_${suffix}`;
@@ -34,6 +41,7 @@ export function publicOrigin(headers, fallback = 'http://127.0.0.1:3000') {
 }
 
 export async function createCheckoutSession({ packageId, userId, origin }) {
+  assertCommerceDisabled();
   const pkg = packageById(packageId);
   if (!pkg) {
     const error = new Error('Unknown coin package.');
@@ -86,6 +94,7 @@ async function paymentIntentOf(stripe, session) {
 }
 
 export async function readCheckoutSession(sessionId) {
+  assertCommerceDisabled();
   if (!sessionId || typeof sessionId !== 'string' || !sessionId.startsWith('cs_')) {
     const error = new Error('Missing checkout session.');
     error.status = 400;
@@ -117,6 +126,7 @@ export async function readCheckoutSession(sessionId) {
 }
 
 export async function handleStripeWebhook(rawBody, signature) {
+  assertCommerceDisabled();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) {
     const error = new Error('STRIPE_WEBHOOK_SECRET is not set.');

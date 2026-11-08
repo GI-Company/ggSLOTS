@@ -1,11 +1,10 @@
 import { UserProfile, CurrencyType, WinResult, GameHistoryEntry, BlackjackState, Card, PokerState, MinesState, CrashState, RouletteBet } from '../types';
-import { REDEMPTION_UNLOCK_PRICE } from '../constants';
 import { complianceService } from './complianceService';
 import {
     spinSlots, spinPlinko, getPlinkoMultipliers, shuffleShoe, drawCard, handScore,
     isBlackjack, isSoft17, playDealer, evaluatePoker, buildScratchTicket, roundMoney
 } from '../lib/engine';
-import { coverPayout, emptyHousePool, recordDeposit, recordRedemption, redemptionRoom, HousePool } from '../lib/housePool';
+import { coverPayout, emptyHousePool, redemptionRoom, HousePool } from '../lib/housePool';
 import {
     placeMines, minesMultiplier, crashPoint, crashMultiplierAt, spinWheel, rouletteCredit, rouletteStake, rouletteColor, MINES_TILES
 } from '../lib/advancedGames';
@@ -58,11 +57,6 @@ function visible(user: StoredUser): UserProfile {
 
 function emit(user: UserProfile) {
     listeners.get(user.id)?.forEach(callback => callback(user));
-}
-
-async function hashPassword(password: string): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
-    return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function requireUser(db: DB, userId: string): StoredUser {
@@ -243,41 +237,11 @@ export const localCasino = {
             save(db);
             return { user: visible(guest), message: 'Welcome Guest! 100,000 Gold Coins are ready.' };
         },
-        signIn: async (email: string, password?: string, profileData?: Partial<UserProfile>) => {
-            const db = load();
-            try {
-                if (!password) return { data: null, error: 'Password required' };
-                const passwordHash = await hashPassword(password);
-                if (profileData) {
-                    if (db.users.some(user => user.email.toLowerCase() === email.toLowerCase() && !user.isGuest)) {
-                        return { data: null, error: 'An account with that email already exists on this device.' };
-                    }
-                    const user = freshProfile({
-                        id: crypto.randomUUID(),
-                        email,
-                        passwordHash,
-                        gcBalance: 25000,
-                        scBalance: 20,
-                        ...profileData,
-                        kycStatus: profileData.kycStatus || 'unverified',
-                        isAddressLocked: true
-                    });
-                    db.users.push(user);
-                    db.sessionId = user.id;
-                    save(db);
-                    return { data: visible(user), error: null, message: 'Welcome! 25,000 GC and 20.00 SC are in your account.' };
-                }
-                const user = db.users.find(entry => entry.email.toLowerCase() === email.toLowerCase() && !entry.isGuest);
-                if (!user || user.passwordHash !== passwordHash) return { data: null, error: 'Email or password is incorrect.' };
-                touchDaily(user);
-                db.sessionId = user.id;
-                save(db);
-                return { data: visible(user), error: null, message: 'Welcome back!' };
-            } catch (error: any) {
-                return { data: null, error: error.message || 'Authentication failed' };
-            }
-        },
-        resetPassword: async () => ({ success: false, message: 'Password reset email needs a connected account service. Use the password saved on this device.' }),
+        signIn: async (_email: string, _password?: string, _profileData?: Partial<UserProfile>): Promise<{ data: UserProfile | null; error: string | null }> => ({
+            data: null,
+            error: 'Account registration is unavailable in the local demo. Choose Guest Play; do not enter personal information.'
+        }),
+        resetPassword: async () => ({ success: false, message: 'No password accounts are available in free-play demo mode.' }),
         signOut: async () => {
             const db = load();
             db.sessionId = null;
@@ -298,9 +262,8 @@ export const localCasino = {
             listeners.set(userId, set);
             return () => { set.delete(callback); };
         },
-        submitKyc: async (userId: string) => {
-            withUser(userId, user => { user.kycStatus = 'pending'; });
-            return { success: true };
+        submitKyc: async (_userId: string) => {
+            throw new Error('Identity document collection is disabled in the free-play preview.');
         }
     },
     game: {
@@ -720,35 +683,11 @@ export const localCasino = {
         }
     },
     db: {
-        purchasePackage: async (price: number, gcAmount: number, scAmount: number, sessionId?: string) => {
-            const db = load();
-            const user = requireUser(db, db.sessionId || '');
-            if (sessionId && user.claimedSessions?.includes(sessionId)) return visible(user);
-            user.gcBalance = roundMoney(CurrencyType.GC, user.gcBalance + gcAmount);
-            user.scBalance = roundMoney(CurrencyType.SC, user.scBalance + scAmount);
-            if (price >= REDEMPTION_UNLOCK_PRICE) user.hasUnlockedRedemption = true;
-            recordDeposit(db.pool, price);
-            user.claimedSessions = [...(user.claimedSessions || []), sessionId || crypto.randomUUID()];
-            pushHistory(db, user.id, 'coin-purchase', CurrencyType.GC, price, gcAmount);
-            save(db);
-            const next = visible(user);
-            emit(next);
-            return next;
+        purchasePackage: async (_price: number, _gcAmount: number, _scAmount: number, _sessionId?: string): Promise<UserProfile> => {
+            throw new Error('Purchases are disabled. GGSlots is a free-play demo.');
         },
-        redeem: async (amount: number) => {
-            const db = load();
-            const user = requireUser(db, db.sessionId || '');
-            if (user.kycStatus !== 'verified') throw new Error('Identity verification is required.');
-            if (!user.hasUnlockedRedemption) throw new Error('Redemption is still locked.');
-            if (amount > user.redeemableSc) throw new Error('Amount is above the redeemable balance.');
-            recordRedemption(db.pool, amount);
-            user.redeemableSc = roundMoney(CurrencyType.SC, user.redeemableSc - amount);
-            user.scBalance = roundMoney(CurrencyType.SC, user.scBalance - amount);
-            pushHistory(db, user.id, 'redemption', CurrencyType.SC, amount, 0);
-            save(db);
-            const next = visible(user);
-            emit(next);
-            return next;
+        redeem: async (_amount: number): Promise<UserProfile> => {
+            throw new Error('Prize redemption is not available in the free-play demo.');
         }
     }
 };

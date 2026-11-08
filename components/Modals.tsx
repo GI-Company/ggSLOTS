@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MIN_REDEMPTION, REDEMPTION_UNLOCK_PRICE, COIN_PACKAGES } from '../constants';
-import { UserProfile, GameHistoryEntry, KycStatus, CoinPackage } from '../types';
+import { MIN_REDEMPTION, REDEMPTION_UNLOCK_PRICE } from '../constants';
+import { UserProfile, GameHistoryEntry, KycStatus } from '../types';
 import { supabaseService } from '../services/supabaseService';
-import { paymentService } from '../services/paymentService';
 import toast from 'react-hot-toast';
 
 // --- Shared Modal Wrapper ---
@@ -105,9 +104,9 @@ export const GameRulesModal: React.FC<{ onClose: () => void; gameTitle: string }
                     General Info
                 </h4>
                 <ul className="list-disc pl-5 space-y-1 text-slate-400">
-                    <li>Prizes are paid from the shared player pool.</li>
-                    <li>One player can win more than they wagered when other play has funded it.</li>
-                    <li>Total prizes for all players never exceed total wagers.</li>
+                    <li>Free-play demonstration credits are settled on this device.</li>
+                    <li>The local demo pool is not shared between devices or users on other browsers.</li>
+                    <li>Demo balances have no cash value and are not redeemable.</li>
                     <li>Malfunction voids all pays and plays.</li>
                 </ul>
             </div>
@@ -115,36 +114,23 @@ export const GameRulesModal: React.FC<{ onClose: () => void; gameTitle: string }
             <div>
                  <h4 className="text-white font-bold text-lg mb-2">Sweeps Cash (SC) Mode</h4>
                  <div className="bg-gradient-to-r from-green-900/20 to-slate-800 p-4 rounded-xl border border-green-900/50">
-                    <p className="mb-2 text-green-100"><strong>1.00 SC = $1.00 USD</strong> for redemption.</p>
-                    <p className="text-xs text-green-200/70">SC must be played through 1x before redemption. Cash paid out to all players cannot exceed the purchases those players made. A single player can cash out more than they personally spent when other purchases cover it.</p>
+                    <p className="mb-2 text-green-100"><strong>Sweeps Cash is disabled during the free-play preview.</strong></p>
+                    <p className="text-xs text-green-200/70">No purchases, cash prizes, or redemption are available in this build.</p>
                  </div>
             </div>
         </div>
     </Modal>
 );
 
-// --- Sweepstakes Rules Modal ---
+// --- Sweepstakes unavailable: do not advertise unimplemented entry procedures ---
 export const SweepstakesRulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-    <Modal onClose={onClose} title="Official Rules">
-        <div className="space-y-4 text-slate-300 text-xs sm:text-sm">
-            <div className="font-bold text-white uppercase text-center bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-sm">
-                NO PURCHASE NECESSARY TO ENTER OR WIN.
-            </div>
-            
-            <h5 className="text-white font-bold text-base">1. Eligibility</h5>
-            <p>Open only to legal residents of the United States (excluding Washington and Idaho) who are at least eighteen (18) years old.</p>
-
-            <h5 className="text-white font-bold text-base">2. Obtaining Sweeps Cash</h5>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="bg-slate-800 p-2 rounded border border-slate-700"><strong>Free Bonus:</strong> Sign-up & Daily Login</div>
-                <div className="bg-slate-800 p-2 rounded border border-slate-700"><strong>Mail-In (AMO):</strong> Send 3x5 card</div>
-                <div className="bg-slate-800 p-2 rounded border border-slate-700 col-span-1 sm:col-span-2"><strong>Promotion:</strong> Free with GC Purchase</div>
-            </div>
-
-            <p className="text-[10px] text-slate-500 mt-6 text-center border-t border-slate-800 pt-4">
-                Void where prohibited by law. Full Terms & Conditions available on website.
-            </p>
-        </div>
+    <Modal onClose={onClose} title="Sweeps Cash unavailable">
+        <p className="text-slate-300 text-sm">
+            GGSlots is operating as a free-play demonstration only. Sweepstakes entries,
+            cash prizes, purchases, and redemptions are not offered in this preview.
+            Any future sweepstakes program will require separately published official rules
+            and eligibility verification before launch.
+        </p>
     </Modal>
 );
 
@@ -188,143 +174,23 @@ export const HistoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     );
 };
 
-// --- Get Coins Store ---
-export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | null; onRegister: () => void }> = ({ onClose, user, onRegister }) => {
-    const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
-    const [step, setStep] = useState<'select' | 'payment_pending'>('select');
-    const [isLoading, setIsLoading] = useState(false);
-    const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
-    
-    const isGuest = !user || user.isGuest;
-
-    const handleSelectPkg = async (pkg: CoinPackage) => { 
-        if (isGuest || !user) {
-            toast('Purchasing requires a verified account.', { icon: '🔒', duration: 4000 });
-            onRegister();
-            return;
-        }
-        
-        setSelectedPkg(pkg);
-        setIsLoading(true);
-        try {
-            const response = await paymentService.createCheckout(pkg.id, user.id);
-            if (!response.url) throw new Error('Stripe did not return a checkout page.');
-            window.location.href = response.url;
-        } catch (e: any) {
-            toast.error(e.message || "Failed to initiate payment");
-            setStep('select');
-            setIsLoading(false);
-        }
-    };
-    
-    return (
-        <Modal onClose={onClose} title="Coin Store">
-            {step === 'select' && (
-                 <div className="grid gap-4">
-                    {COIN_PACKAGES.map((pkg, i) => (
-                        <div key={i} 
-                             onClick={() => !isLoading && handleSelectPkg(pkg)}
-                             className={`
-                                group relative overflow-hidden bg-slate-800/50 rounded-2xl border-2 cursor-pointer transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]
-                                flex items-center p-4
-                                ${pkg.isBestValue ? 'border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.1)]' : 'border-slate-700 hover:border-slate-500'}
-                                ${isLoading ? 'opacity-50 cursor-wait' : ''}
-                             `}
-                        >
-                             {pkg.isBestValue && (
-                                 <div className="absolute top-0 right-0 bg-yellow-500 text-slate-900 text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider z-10">
-                                     Best Value
-                                 </div>
-                             )}
-                             
-                             <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 mr-4 shadow-inner">
-                                <div className={`w-12 h-12 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 shadow-lg ${pkg.isBestValue ? 'animate-pulse' : ''}`}></div>
-                             </div>
-
-                             <div className="flex-1">
-                                 <div className="text-xl font-black text-white font-display tracking-tight group-hover:text-yellow-400 transition-colors">
-                                     {pkg.gcAmount.toLocaleString()} <span className="text-yellow-500 text-sm">GC</span>
-                                 </div>
-                                 {pkg.scAmount > 0 && (
-                                     <div className="text-sm font-bold text-green-400 flex items-center gap-1">
-                                         + {pkg.scAmount.toFixed(2)} SC <span className="bg-green-500/20 px-1.5 py-0.5 rounded text-[10px] text-green-300 uppercase">Free</span>
-                                     </div>
-                                 )}
-                             </div>
-                             
-                             <button className={`
-                                 min-w-[100px] py-2 px-3 rounded-xl transition-colors font-bold flex items-center justify-center gap-2
-                                 ${isGuest 
-                                    ? 'bg-slate-900 border border-slate-600 text-slate-400 text-xs' 
-                                    : 'bg-slate-700 group-hover:bg-indigo-600 text-white'}
-                             `}>
-                                 {isGuest ? (
-                                     <>
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                        LOGIN
-                                     </>
-                                 ) : isLoading && selectedPkg?.id === pkg.id ? (
-                                     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                 ) : (
-                                     `$${pkg.price}`
-                                 )}
-                             </button>
-                        </div>
-                    ))}
-                 </div>
-            )}
-
-            {step === 'select' && (
-                <p className="text-[11px] text-slate-500 text-center">
-                    Checkout is Stripe-hosted. You are buying Gold Coins. Sweeps Cash shown here is a free promotional entry, not the product being charged.
-                </p>
-            )}
-
-            {step === 'payment_pending' && selectedPkg && invoiceUrl && (
-                <div className="flex flex-col items-center animate-in slide-in-from-right duration-300 h-full">
-                    {/* Header Summary for Checkout */}
-                    <div className="bg-slate-800/50 p-4 rounded-xl text-center border border-slate-700 w-full mb-4">
-                        <div className="text-slate-400 text-xs uppercase font-bold mb-1">Secure Checkout</div>
-                        <div className="inline-block bg-slate-900/80 px-4 py-1.5 rounded-full border border-slate-700 text-sm">
-                            <span className="text-yellow-500 font-bold">{selectedPkg.gcAmount.toLocaleString()} GC</span>
-                            <span className="mx-2 text-slate-600">|</span>
-                            <span className="text-green-500 font-bold">{selectedPkg.scAmount} SC</span>
-                        </div>
-                    </div>
-
-                    {/* NOWPayments Invoice IFrame */}
-                    <div className="w-full flex-1 bg-slate-950 border border-slate-800 relative shadow-inner overflow-hidden rounded-xl" style={{ minHeight: '500px' }}>
-                         <iframe 
-                            src={invoiceUrl}
-                            width="100%" 
-                            height="100%" 
-                            frameBorder="0" 
-                            className="absolute inset-0"
-                            allow="payment"
-                        >
-                            Loading Secure Payment Gateway...
-                        </iframe>
-                    </div>
-
-                    <div className="mt-4 w-full">
-                        <div className="bg-indigo-900/20 border border-indigo-500/30 p-3 rounded-lg flex gap-3 items-start mb-4">
-                            <svg className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                            <p className="text-xs text-indigo-200/80 leading-relaxed">
-                                Complete your payment in the secure window above. Supported cryptocurrencies include BTC, ETH, USDT, TRX and more.
-                                <br/><br/>
-                                <strong>Note:</strong> Your account balance will update automatically once the transaction is confirmed on the blockchain (usually 2-10 minutes).
-                            </p>
-                        </div>
-
-                        <button onClick={onClose} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl shadow-lg transition-colors border border-slate-700">
-                            Close
-                        </button>
-                    </div>
-                </div>
-            )}
-        </Modal>
-    );
-};
+// --- Free-play notice: checkout must not be reachable from the client ---
+export const GetCoinsModal: React.FC<{ onClose: () => void; user: UserProfile | null; onRegister: () => void }> = ({ onClose }) => (
+    <Modal onClose={onClose} title="Free-play preview">
+        <div role="status" className="space-y-4 text-center">
+            <h4 className="text-xl font-bold text-white">Purchases are paused</h4>
+            <p className="text-slate-300 text-sm">
+                Play Gold Coin games for free as a guest. Gold Coins are demonstration credits
+                with no monetary value. No payments, sweepstakes entries or prize redemptions
+                are available in this preview.
+            </p>
+            <button type="button" onClick={onClose}
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-3">
+                Back to games
+            </button>
+        </div>
+    </Modal>
+);
 
 // --- Redeem Modal ---
 export const RedeemModal: React.FC<{ onClose: () => void; user: UserProfile; onRedeem: (amount: number) => void; onOpenKyc: () => void }> = ({ onClose, user, onRedeem, onOpenKyc }) => {

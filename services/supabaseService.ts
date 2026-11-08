@@ -453,18 +453,13 @@ const remoteService = {
   }
 };
 
+// Until an audited, server-authoritative wallet and ledger are available,
+// never route gameplay or account actions to unverified remote RPCs.
 let preferLocal = true;
 
-/** Use Supabase only when the project key is set and the profiles table is actually there. */
 export async function prepareCasinoBackend(): Promise<'local' | 'remote'> {
-    if (!supabase) {
-        preferLocal = true;
-        return 'local';
-    }
-    const { error } = await supabase.from('profiles').select('id').limit(1);
-    const tableExists = !error || error.code === '42501';
-    preferLocal = !tableExists;
-    return preferLocal ? 'local' : 'remote';
+    preferLocal = true;
+    return 'local';
 }
 
 export const supabaseService = new Proxy(remoteService, {

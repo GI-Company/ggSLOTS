@@ -134,17 +134,24 @@ if (ledger.pool.wonGc - ledger.pool.wageredGc > 0.001 || ledger.pool.wonSc - led
     throw new Error('Shared pool paid out more than every player wagered');
 }
 
-const { createCheckoutSession } = await import('../server/stripe.mjs');
-let checkoutBlocked = false;
-try {
-    await createCheckoutSession({ packageId: 'pkg_5', userId: 'player', origin: 'http://127.0.0.1:3000' });
-} catch (error: any) {
-    checkoutBlocked = String(error.message).includes('STRIPE_SECRET_KEY') || String(error.code) === 'STRIPE_NOT_CONFIGURED';
+// Commerce must remain fail-closed even if secrets are configured.
+const { createCheckoutSession, readCheckoutSession, handleStripeWebhook } = await import('../server/stripe.mjs');
+for (const operation of [
+  () => createCheckoutSession({ packageId: 'pkg_5', userId: 'player', origin: 'https://gg-slots.vercel.app' }),
+  () => readCheckoutSession('cs_test_placeholder'),
+  () => handleStripeWebhook(Buffer.from('{}'), 'invalid')
+]) {
+  let blocked = false;
+  try { await operation(); } catch (error: any) { blocked = error.code === 'COMMERCE_DISABLED' && error.status === 503; }
+  if (!blocked) throw new Error('Commerce endpoint did not fail closed');
 }
-if (process.env.STRIPE_SECRET_KEY) {
-    console.log('Stripe key is present; live checkout call was not forced.');
-} else if (!checkoutBlocked) {
-    throw new Error('Checkout should refuse to run without a Stripe key');
-}
+const demoSignIn = await localCasino.auth.signIn('no@example.invalid', 'unused-password');
+if (demoSignIn.data || !demoSignIn.error) throw new Error('Local password registration must be disabled');
+let localPurchaseBlocked = false;
+try { await localCasino.db.purchasePackage(4.99, 5000, 5); } catch { localPurchaseBlocked = true; }
+if (!localPurchaseBlocked) throw new Error('Demo wallet was credited by a purchase call');
+let localRedeemBlocked = false;
+try { await localCasino.db.redeem(5); } catch { localRedeemBlocked = true; }
+if (!localRedeemBlocked) throw new Error('Demo wallet redemption was not blocked');
 
-console.log('Game checks passed.');
+console.log('Free-play game and commerce safety checks passed.');
